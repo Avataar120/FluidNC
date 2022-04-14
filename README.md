@@ -1,5 +1,7 @@
 <img src="https://github.com/bdring/FluidNC/wiki/images/logos/FluidNC.svg" width="600">
 
+Changed readme
+
 ## Introduction
 
 **FluidNC** is the next generation of the Grbl_ESP32 CNC control firmware. It has a lot of improvements over Grbl_ESP32 as listed below.
