@@ -13,12 +13,12 @@ WebUI::WiFiConfig wifi_config __attribute__((init_priority(109)));
 #ifdef ENABLE_WIFI
 #    include "../Config.h"
 #    include "../Main.h"
-#    include "Commands.h"      // COMMANDS
+#    include "Commands.h"  // COMMANDS
 #    include "WifiServices.h"  // wifi_services.start() etc.
-#    include "WebSettings.h"   // get_param()
+#    include "WebSettings.h"  // get_param()
 
-#    include "WebServer.h"             // webServer.port()
-#    include "TelnetServer.h"          // telnetServer
+#    include "WebServer.h"  // webServer.port()
+#    include "TelnetServer.h"  // telnetServer
 #    include "NotificationsService.h"  // notificationsservice
 
 #    include <WiFi.h>
@@ -125,12 +125,13 @@ namespace WebUI {
     IntSetting* wifi_ap_channel;
 
     HostnameSetting* wifi_hostname;
-    StringSetting* URL_ToCall;
-    StringSetting* CMD_EndJob;
-    StringSetting* CMD_StartJob;
-    IntSetting*    CMD_StartWithM100;
-    IntSetting*    CMD_StartWithM345;
-    IntSetting*    CMD_ResetOnMachinePoweredOn;
+    StringSetting*   URL_ToCall;
+    StringSetting*   CMD_EndJob;
+    StringSetting*   CMD_StartJob;
+    IntSetting*      CMD_StartWithM100;
+    IntSetting*      CMD_StartWithM345;
+    IntSetting*      CMD_ReportEndJob;
+    IntSetting*      CMD_ResetOnMachinePoweredOn;
 
     enum_opt_t staModeOptions = {
         { "DHCP", DHCP_MODE },
@@ -484,11 +485,12 @@ namespace WebUI {
     WiFiConfig::WiFiConfig() {
         new WebCommand(NULL, WEBCMD, WU, "ESP410", "WiFi/ListAPs", listAPs);
 
-        URL_ToCall        = new StringSetting("URL to call", WEBSET, WA, "NULL", "URLToCall", DEFAULT_URLTOCALL, 0, 255, NULL);
-        CMD_EndJob        = new StringSetting("CMD End Job", WEBSET, WA, "NULL", "CMDEndJob", DEFAULT_CMDENDJOB, 0, 255, NULL);
-        CMD_StartJob      = new StringSetting("CMD Start Job", WEBSET, WA, "NULL", "CMDStartJob", DEFAULT_CMDSTARTJOB, 0, 255, NULL);
+        URL_ToCall        = new StringSetting("URL to call", WEBSET, WA, "NULL", "URLToCall", DEFAULT_URLTOCALL, 0, 255);
+        CMD_EndJob        = new StringSetting("CMD End Job", WEBSET, WA, "NULL", "CMDEndJob", DEFAULT_CMDENDJOB, 0, 255);
+        CMD_StartJob      = new StringSetting("CMD Start Job", WEBSET, WA, "NULL", "CMDStartJob", DEFAULT_CMDSTARTJOB, 0, 255);
         CMD_StartWithM100 = new IntSetting("Call start URL with M100", WEBSET, WA, "NULL", "CMDStartURLwithM100", 0, 0, 1, NULL);
         CMD_StartWithM345 = new IntSetting("Call start URL with M3 / M4 / M5", WEBSET, WA, "NULL", "CMDStartURLwithM345", 1, 0, 1, NULL);
+        CMD_ReportEndJob  = new IntSetting("State of end of job reporting", WEBSET, WA, "NULL", "CMDJobEndReporting", 1, 0, 1, NULL);
         CMD_ResetOnMachinePoweredOn =
             new IntSetting("Reset when the machine is powered ON", WEBSET, WA, "NULL", "ResetOnPowerON", 1, 0, 1, NULL);
 

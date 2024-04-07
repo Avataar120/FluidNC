@@ -518,7 +518,7 @@ Error gc_execute_line(char* line) {
                         int    StartWithM345 = GetStartURLWithM345();
 
                         log_debug("M3/4/5");
-                        if ((s != "") && (StartWithM345) && (!StartURLCalled)) {
+                        if ((s != "") && (GetReportEndJob()) && (StartWithM345) && (!StartURLCalled)) {
                             log_debug("Call URL M345");
                             StartURLCalled = 1;
                             CallURLWithRetryStrategy(s);
@@ -1760,7 +1760,7 @@ void WEAK_LINK user_m30() {
 
     StartURLCalled = 0;
 
-    if (s != "")
+    if ((s != "") && (GetReportEndJob()))
         CallURLWithRetryStrategy(s);
 
     nb_work_done++;
@@ -1772,7 +1772,7 @@ void WEAK_LINK user_m100() {
     String s            = GetCMDStartPrg();
     int    StartWitM100 = GetStartURLWithM100();
 
-    if ((s != "") && (StartWitM100)) {
+    if ((s != "") && (GetReportEndJob()) && (StartWitM100)) {
         StartURLCalled = 1;
         CallURLWithRetryStrategy(s);
     }

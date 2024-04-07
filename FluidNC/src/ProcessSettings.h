@@ -13,5 +13,6 @@ String      GetCMDEndPrg();
 String      GetCMDStartPrg();
 int         GetStartURLWithM345();
 int         GetStartURLWithM100();
+int         GetReportEndJob();
 int         GetResetWhenPowerOn();
 extern int  nb_work_done;

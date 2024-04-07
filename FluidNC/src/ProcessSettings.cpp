@@ -742,6 +742,10 @@ int GetStartURLWithM345() {
     return WebUI::CMD_StartWithM345->get();
 }
 
+int GetReportEndJob() {
+    return WebUI::CMD_ReportEndJob->get();
+}
+
 int GetStartURLWithM100() {
     return WebUI::CMD_StartWithM100->get();
 }
@@ -753,9 +757,10 @@ int GetResetWhenPowerOn() {
 void ReconnectWifi() {
     log_debug("Try to reconnext to Wifi");
     WiFi.mode(WIFI_OFF);
+    esp_wifi_disconnect();
     esp_wifi_restore();
-
     delay(100);
+    WebUI::WiFiConfig::begin();
 }
 
 void CallURLWithRetryStrategy(String cmd) {
@@ -783,12 +788,13 @@ urlFeedback CallURL(String cmd) {
 
     client.setInsecure();
     client.connect(host.c_str(), 443);
-    //if (!client.connect(host.c_str(), 443))
-    //    log_info("Connection to server failed! - Wifi status : " + std::to_string(WiFi.status()) + " - Wifi Mode : " +std::to_string(WiFi.getMode()) )
-
+    // if (!client.connect(host.c_str(), 443)) {
+    //     log_info("Connection to server failed! - Wifi status : " + std::to_string(WiFi.status()) +
+    //              " - Wifi Mode : " + std::to_string(WiFi.getMode()));
+    //     return NOT_SUCCESSFUL;
+    // } else {
+    //     log_debug("Connection succesfully to server !");
     {
-        //log_info("Connection succesfully to server !");
-
         log_debug("Start calling URL");
         url = host;
         if (cmd != "") {
@@ -814,7 +820,8 @@ urlFeedback CallURL(String cmd) {
                     return URL_CALL_OK;
 
                 } else {
-                    log_info("Failed to call URL");
+                    log_info("Failed to call URL - error http : ");
+                    log_info(httpCode);
                     http.end();
                     client.stop();
                     return NOT_SUCCESSFUL;

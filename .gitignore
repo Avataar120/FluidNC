@@ -35,6 +35,7 @@ FluidNC/src/version.cxx
 install_scripts/win64/wifi/spiffs.bin
 example_configs/
 ava_configs/
+Ava_Shield_Configs/
 
 *.cppx
 *.hx

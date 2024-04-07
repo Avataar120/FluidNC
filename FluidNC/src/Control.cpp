@@ -45,7 +45,7 @@ std::string Control::report_status() {
 
 bool Control::stuck() {
     for (auto pin : _pins) {
-        if (pin->get()) {
+        if (pin->get() && (pin->letter() != 'W')) {
             return true;
         }
     }
