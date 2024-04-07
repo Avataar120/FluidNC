@@ -369,6 +369,7 @@ static Error disable_alarm_lock(const char* value, WebUI::AuthenticationLevel au
             return err;
         }
         Homing::set_all_axes_homed();
+        config->_kinematics->releaseMotors(config->_axes->motorMask, config->_axes->hardLimitMask());
         report_feedback_message(Message::AlarmUnlock);
         sys.state = State::Idle;
     }
@@ -1044,6 +1045,14 @@ static Error setReportInterval(const char* value, WebUI::AuthenticationLevel aut
     return Error::Ok;
 }
 
+static Error sendAlarm(const char* value, WebUI::AuthenticationLevel auth_level, Channel& out) {
+    int       intValue = value ? atoi(value) : 0;
+    ExecAlarm alarm    = static_cast<ExecAlarm>(intValue);
+    log_debug("Sending alarm " << intValue << " " << alarmString(alarm));
+    send_alarm(alarm);
+    return Error::Ok;
+}
+
 static Error showHeap(const char* value, WebUI::AuthenticationLevel auth_level, Channel& out) {
     log_info("Heap free: " << xPortGetFreeHeapSize() << " min: " << heapLowWater);
     return Error::Ok;
@@ -1079,7 +1088,6 @@ void make_user_commands() {
     new UserCommand("NVX", "Settings/Erase", Setting::eraseNVS, notIdleOrAlarm, WA);
     new UserCommand("V", "Settings/Stats", Setting::report_nvs_stats, notIdleOrAlarm);
     new UserCommand("#", "GCode/Offsets", report_ngc, notIdleOrAlarm);
-    new UserCommand("H", "Home", home_all, anyState);
     new UserCommand("MD", "Motor/Disable", motor_disable, notIdleOrAlarm);
     new UserCommand("ME", "Motor/Enable", motor_enable, notIdleOrAlarm);
     new UserCommand("MI", "Motors/Init", motors_init, notIdleOrAlarm);
@@ -1087,6 +1095,7 @@ void make_user_commands() {
 
     new UserCommand("RM", "Macros/Run", macros_run, notIdleOrAlarm);
 
+    new UserCommand("H", "Home", home_all, anyState);
     new UserCommand("HX", "Home/X", home_x, anyState);
     new UserCommand("HY", "Home/Y", home_y, anyState);
     new UserCommand("HXY", "Home/XY", home_xy, anyState);
@@ -1109,6 +1118,7 @@ void make_user_commands() {
     new UserCommand("N", "GCode/StartupLines", show_startup_lines, notIdleOrAlarm);
     new UserCommand("RST", "Settings/Restore", restore_settings, notIdleOrAlarm, WA);
 
+    new UserCommand("SA", "Alarm/Send", sendAlarm, anyState);
     new UserCommand("Heap", "Heap/Show", showHeap, anyState);
     new UserCommand("SS", "Startup/Show", showStartupLog, anyState);
 
@@ -1154,7 +1164,7 @@ char* normalize_key(char* start) {
 
 // This is the handler for all forms of settings commands,
 // $..= and [..], with and without a value.
-Error do_command_or_setting(const char* key, char* value, WebUI::AuthenticationLevel auth_level, Channel& out) {
+Error do_command_or_setting(const char* key, const char* value, WebUI::AuthenticationLevel auth_level, Channel& out) {
     // If value is NULL, it means that there was no value string, i.e.
     // $key without =, or [key] with nothing following.
     // If value is not NULL, but the string is empty, that is the form

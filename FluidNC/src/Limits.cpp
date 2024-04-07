@@ -9,6 +9,7 @@
 #include "System.h"         // sys.*
 #include "Protocol.h"       // protocol_execute_realtime
 #include "Platform.h"       // WEAK_LINK
+#include "Machine/Axis.h"
 
 #include <freertos/task.h>
 #include <freertos/queue.h>
@@ -41,6 +42,21 @@ void limits_init() {
 // The lower 16 bits are used for motor0 and the upper 16 bits are used for motor1 switches
 MotorMask limits_get_state() {
     return Machine::Axes::posLimitMask | Machine::Axes::negLimitMask;
+}
+
+bool limits_startup_check() {  // return true if there is a hard limit error.
+    MotorMask lim_pin_state = limits_get_state();
+    if (lim_pin_state) {
+        auto n_axis = config->_axes->_numberAxis;
+        for (size_t axis = 0; axis < n_axis; axis++) {
+            for (size_t motor = 0; motor < 2; motor++) {
+                if (bitnum_is_true(lim_pin_state, Machine::Axes::motor_bit(axis, motor))) {
+                    log_warn("Active limit switch on " << config->_axes->axisName(axis) << " axis motor " << motor);
+                }
+            }
+        }
+    }
+    return (config->_start->_checkLimits && (config->_axes->hardLimitMask() & lim_pin_state));
 }
 
 // Called only from Kinematics canHome() methods, hence from states allowing homing
