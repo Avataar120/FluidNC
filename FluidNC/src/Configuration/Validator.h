@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../Pin.h"
+#include "Pin.h"
 #include "HandlerBase.h"
 
 #include <vector>
@@ -12,7 +12,7 @@ namespace Configuration {
     class Configurable;
 
     class Validator : public HandlerBase {
-        Validator(const Validator&) = delete;
+        Validator(const Validator&)            = delete;
         Validator& operator=(const Validator&) = delete;
 
         std::vector<const char*> _path;
@@ -26,14 +26,19 @@ namespace Configuration {
         Validator();
 
         void item(const char* name, bool& value) override {}
-        void item(const char* name, int32_t& value, int32_t minValue, int32_t maxValue) override {}
-        void item(const char* name, uint32_t& value, uint32_t minValue, uint32_t maxValue) override {}
-        void item(const char* name, float& value, float minValue, float maxValue) override {}
+        void item(const char* name, int32_t& value, const int32_t minValue, const int32_t maxValue) override {}
+        void item(const char* name, uint32_t& value, const uint32_t minValue, const uint32_t maxValue) override {}
+        void item(const char* name, float& value, const float minValue, const float maxValue) override {}
         void item(const char* name, std::vector<speedEntry>& value) override {}
+        void item(const char* name, std::vector<float>& value) override {}
         void item(const char* name, UartData& wordLength, UartParity& parity, UartStop& stopBits) override {}
-        void item(const char* name, std::string& value, int minLength, int maxLength) override {}
+        void item(const char* name, std::string& value, const int minLength, const int maxLength) override {}
+        void item(const char* name, EventPin& value) override {}
+        void item(const char* name, InputPin& value) override {}
         void item(const char* name, Pin& value) override {}
+        void item(const char* name, Macro& value) override {}
         void item(const char* name, IPAddress& value) override {}
-        void item(const char* name, int& value, EnumItem* e) override {}
+        void item(const char* name, uint32_t& value, const EnumItem* e) override {}
+        void item(const char* name, axis_t& value) override {}
     };
 }

@@ -3,54 +3,60 @@
 // Use of this source code is governed by a GPLv3 license that can be found in the LICENSE file.
 
 #include "Probe.h"
+#include "Machine/EventPin.h"
+#include "Machine/MachineConfig.h"
 
-#include "Pin.h"
+extern void    protocol_do_probe(void* arg);
+const ArgEvent probeEvent { protocol_do_probe };
 
-// Probe pin initialization routine.
+Probe::ProbeEventPin::ProbeEventPin(const char* legend) : EventPin(&probeEvent, ExecAlarm::None, legend) {}
+
 void Probe::init() {
-    static bool show_init_msg = true;  // used to show message only once.
-
-    if (_probePin.defined()) {
-        _probePin.getNative(Pin::Capabilities::Input | Pin::Capabilities::Native);
-        _probePin.setAttr(Pin::Attr::Input);
-
-        if (show_init_msg) {
-            _probePin.report("Probe Pin:");
-            show_init_msg = false;
-        }
-    }
-
-    if (_toolsetter_Pin.defined()) {
-        _toolsetter_Pin.getNative(Pin::Capabilities::Input | Pin::Capabilities::Native);
-        _toolsetter_Pin.setAttr(Pin::Attr::Input);
-
-        if (show_init_msg) {
-            _toolsetter_Pin.report("Toolsetter Pin:");
-        }
-    }
-    show_init_msg = false;
+    _probePin.init();
+    _toolsetterPin.init();
 }
 
-void Probe::set_direction(bool is_away) {
-    _isProbeAway = is_away;
+void Probe::set_direction(bool away) {
+    _away = away;
 }
 
 // Returns the probe pin state. Triggered = true. Called by gcode parser.
 bool Probe::get_state() {
-    return (_probePin.read() || _toolsetter_Pin.read());
+    return _probePin.get() || _toolsetterPin.get();
 }
 
 // Returns true if the probe pin is tripped, accounting for the direction (away or not).
-// This function must be extremely efficient as to not bog down the stepper ISR.
-// Should be called only in situations where the probe pin is known to be defined.
-bool IRAM_ATTR Probe::tripped() {
-    return (_probePin.read() || _toolsetter_Pin.read()) ^ _isProbeAway;
+bool Probe::tripped() {
+    return get_state() ^ _away;
 }
 
 void Probe::validate() {}
 
 void Probe::group(Configuration::HandlerBase& handler) {
     handler.item("pin", _probePin);
-    handler.item("toolsetter_pin", _toolsetter_Pin);
+    handler.item("toolsetter_pin", _toolsetterPin);
     handler.item("check_mode_start", _check_mode_start);
+    handler.item("hard_stop", _hard_stop);
+    handler.item("probe_hard_limit", _probe_hard_limit);  // non probing motion protection
+}
+void protocol_do_probe(void* arg) {
+    Probe* p = config->_probe;
+    if (p->tripped() && probing) {
+        probing = false;
+        get_steps(probe_steps);
+        if (p->_hard_stop) {
+            Stepper::reset();
+            plan_reset();
+            state_is(State::Idle);
+        } else {
+            protocol_do_motion_cancel();
+        }
+    } else if (p->tripped() && p->_probe_hard_limit) {
+        // trip if in homing, cycle or jog, but not probing
+        if ((state_is(State::Cycle) || state_is(State::Jog) || state_is(State::Homing)) &&
+            (gc_state.modal.motion != Motion::ProbeAway && gc_state.modal.motion != Motion::ProbeAwayNoError &&
+             gc_state.modal.motion != Motion::ProbeToward && gc_state.modal.motion != Motion::ProbeTowardNoError)) {
+            mc_critical(ExecAlarm::ProbeHardLimit);
+        }
+    }
 }

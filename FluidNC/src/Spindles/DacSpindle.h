@@ -3,29 +3,31 @@
 
 #pragma once
 
+#include "Config.h"
+#if MAX_N_DACS
 /*
 	DacSpindle.h
 
-	This uses the Analog DAC in the ESP32 to generate a voltage
+	This uses the Analog DAC to generate a voltage
 	proportional to the GCode S value desired. Some spindle uses
-	a 0-5V or 0-10V value to control the spindle. You would use
-	an Op Amp type circuit to get from the 0.3.3V of the ESP32 to that voltage.
+	a 0-5V or 0-10V value to control the spindle. You might need
+	an external OpAmp circuit to upconvert from the MCU voltage.
 */
 
-#include "OnOffSpindle.h"
+#    include "OnOffSpindle.h"
 
-#include <cstdint>
+#    include <cstdint>
 
 namespace Spindles {
-    // This uses one of the (2) DAC pins on ESP32 to output a voltage
+    // This uses one of the DAC pins to output a voltage
     class Dac : public OnOff {
     public:
-        Dac() = default;
+        Dac(const char* name) : OnOff(name) {}
 
-        Dac(const Dac&) = delete;
-        Dac(Dac&&)      = delete;
+        Dac(const Dac&)            = delete;
+        Dac(Dac&&)                 = delete;
         Dac& operator=(const Dac&) = delete;
-        Dac& operator=(Dac&&) = delete;
+        Dac& operator=(Dac&&)      = delete;
 
         void init() override;
         void config_message() override;
@@ -33,9 +35,6 @@ namespace Spindles {
 
         // Configuration handlers:
         // Inherited from PWM
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "DAC"; }
 
         ~Dac() {}
 
@@ -46,3 +45,4 @@ namespace Spindles {
         void set_output(uint32_t duty);  // sets DAC instead of PWM
     };
 }
+#endif

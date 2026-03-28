@@ -26,7 +26,7 @@ void execute_realtime_command(Cmd command, Channel& channel) {
             protocol_send_event(&safetyDoorEvent);
             break;
         case Cmd::JogCancel:
-            if (sys.state == State::Jog) {  // Block all other states from invoking motion cancel.
+            if (state_is(State::Jog)) {  // Block all other states from invoking motion cancel.
                 protocol_send_event(&motionCancelEvent);
             }
             break;
@@ -95,6 +95,8 @@ void execute_realtime_command(Cmd command, Channel& channel) {
             break;
         case Cmd::Macro3:
             protocol_send_event(&macro3Event);
+            break;
+        default:  // None
             break;
     }
 }

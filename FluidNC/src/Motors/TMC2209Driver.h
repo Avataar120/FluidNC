@@ -4,8 +4,8 @@
 #pragma once
 
 #include "TrinamicUartDriver.h"
-#include "../Pin.h"
-#include "../PinMapper.h"
+#include "Pin.h"
+#include "PinMapper.h"
 
 #include <cstdint>
 
@@ -15,6 +15,8 @@ namespace MotorDrivers {
 
     class TMC2209Driver : public TrinamicUartDriver {
     public:
+        TMC2209Driver(const char* name) : TrinamicUartDriver(name) {}
+
         // Overrides for inherited methods
         void init() override;
         void set_disable(bool disable);
@@ -27,13 +29,18 @@ namespace MotorDrivers {
 
             handler.item("run_mode", _run_mode, trinamicModes);
             handler.item("homing_mode", _homing_mode, trinamicModes);
+            handler.item("homing_amps", _homing_current, 0.0, 10.0);
             handler.item("stallguard", _stallguard, 0, 255);
             handler.item("stallguard_debug", _stallguardDebugMode);
             handler.item("toff_coolstep", _toff_coolstep, 2, 15);
         }
 
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "tmc_2209"; }
+        void afterParse() override {
+            TrinamicUartDriver::afterParse();
+            if (_homing_current == 0) {
+                _homing_current = _run_current;
+            }
+        }
 
     private:
         TMC2209Stepper* tmc2209 = nullptr;

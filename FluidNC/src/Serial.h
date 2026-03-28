@@ -16,9 +16,6 @@
 #include <freertos/queue.h>
 #include <mutex>
 
-// See if the character is an action command like feedhold or jogging. If so, do the action and return true
-uint8_t check_action_command(uint8_t data);
-
 void channel_init();
 
 Channel* pollChannels(char* line = nullptr);
@@ -26,8 +23,8 @@ Channel* pollChannels(char* line = nullptr);
 class AllChannels : public Channel {
     std::vector<Channel*> _channelq;
 
-    Channel*     _lastChannel = nullptr;
-    xQueueHandle _killQueue;
+    Channel*      _lastChannel = nullptr;
+    QueueHandle_t _killQueue;
 
     static std::mutex _mutex_general;
     static std::mutex _mutex_pollLine;
@@ -39,7 +36,7 @@ public:
 
     void registration(Channel* channel);
     void deregistration(Channel* channel);
-    void init();
+    void init() override;
     void ready();
 
     size_t write(uint8_t data) override;
@@ -47,17 +44,16 @@ public:
 
     void print_msg(MsgLevel level, const char* msg) override;
 
-    void flushRx();
+    void flushRx() override;
 
+    void notifyOvr();
     void notifyWco();
     void notifyNgc(CoordIndex coord);
 
     void listChannels(Channel& out);
 
-    Channel* pollLine(char* line) override;
-    Channel* find(const std::string& name);
-
-    void stopJob() override;
+    Channel* find(const std::string_view name);
+    Channel* poll(char* line);
 };
 
 extern AllChannels allChannels;

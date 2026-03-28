@@ -1,14 +1,16 @@
-#include "src/Machine/EventPin.h"
-#include "src/Machine/Axes.h"
-#include "src/Machine/MachineConfig.h"  // config
+// Copyright (c) 2021 -  Mitch Bradley
+// Use of this source code is governed by a GPLv3 license that can be found in the LICENSE file.
 
-#include "src/Limits.h"
-#include "src/Protocol.h"  // protocol_send_event_from_ISR()
+#include "Machine/EventPin.h"
+#include "Machine/Axes.h"
+#include "Machine/MachineConfig.h"  // config
+
+#include "Limit.h"
+#include "Protocol.h"  // protocol_send_event_from_ISR()
 
 namespace Machine {
-    LimitPin::LimitPin(Pin& pin, int axis, int motor, int direction, bool& pHardLimits, bool& pLimited) :
-        EventPin(&limitEvent, "Limit"), _axis(axis), _motorNum(motor), _value(false), _pHardLimits(pHardLimits), _pLimited(pLimited),
-        _pin(&pin) {
+    LimitPin::LimitPin(axis_t axis, motor_t motor, int8_t direction, bool& pHardLimits) :
+        EventPin(&limitEvent, ExecAlarm::HardLimit, "Limit"), _axis(axis), _motorNum(motor), _pHardLimits(pHardLimits) {
         const char* sDir;
         // Select one or two bitmask variables to receive the switch data
         switch (direction) {
@@ -31,35 +33,32 @@ namespace Machine {
                 _negLimits   = nullptr;
                 _posLimits   = nullptr;
                 _pHardLimits = false;
+                sDir         = nullptr;
                 break;
         }
 
         // Set a bitmap with bits to represent the axis and which motors are affected
         // The bitmap looks like CBAZYX..cbazyx where motor0 motors are in the lower bits
         _bitmask = 1 << Axes::motor_bit(axis, motor);
-        _legend  = config->_axes->motorMaskToNames(_bitmask);
+        _legend  = Axes::motorMaskToNames(_bitmask);
         _legend += " ";
         _legend += sDir;
         _legend += " Limit";
     }
 
     void LimitPin::init() {
-        if (_pin->undefined()) {
-            return;
-        }
-        _pin->report(_legend);
-        _pin->setAttr(Pin::Attr::Input);
-        _pin->registerEvent(static_cast<EventPin*>(this));
-        update(get());
+        _pLimited = Stepping::limit_var(_axis, _motorNum);
+        EventPin::init();
     }
 
-    void LimitPin::update(bool value) {
-        if (value) {
-            if (Homing::approach() || (sys.state != State::Homing && _pHardLimits)) {
-                _pLimited = value;
-
+    void LimitPin::trigger(bool active) {
+        if (active) {
+            if (Homing::approach() || (!state_is(State::Homing) && _pHardLimits)) {
+                if (_pLimited != nullptr) {
+                    *_pLimited = active;
+                }
                 if (_pExtraLimited != nullptr) {
-                    *_pExtraLimited = value;
+                    *_pExtraLimited = active;
                 }
             }
 
@@ -70,10 +69,11 @@ namespace Machine {
                 set_bits(*_negLimits, _bitmask);
             }
         } else {
-            _pLimited = value;
-
+            if (_pLimited != nullptr) {
+                *_pLimited = active;
+            }
             if (_pExtraLimited != nullptr) {
-                *_pExtraLimited = value;
+                *_pExtraLimited = active;
             }
             if (_posLimits != nullptr) {
                 clear_bits(*_posLimits, _bitmask);
@@ -82,6 +82,7 @@ namespace Machine {
                 clear_bits(*_negLimits, _bitmask);
             }
         }
+        EventPin::trigger(active);
     }
 
     // Make this switch act like an axis level switch. Both motors will report the same
@@ -91,7 +92,7 @@ namespace Machine {
         _bitmask = Axes::axes_to_motors(Axes::motors_to_axes(_bitmask));
     }
 
-    void LimitPin::setExtraMotorLimit(int axis, int motorNum) {
-        _pExtraLimited = &config->_axes->_axis[axis]->_motors[motorNum]->_limited;
+    void LimitPin::setExtraMotorLimit(axis_t axis, motor_t motorNum) {
+        _pExtraLimited = Stepping::limit_var(axis, motorNum);
     }
 }

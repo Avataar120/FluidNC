@@ -3,9 +3,11 @@
 // Copyright (c) 2021 -  Bart Dring
 // Use of this source code is governed by a GPLv3 license that can be found in the LICENSE file.
 
-#include "SPIBus.h"
-#include "Driver/spi.h"
-#include "src/SettingsDefinitions.h"
+#include "Config.h"
+#if MAX_N_SPI
+#    include "SPIBus.h"
+#    include "Driver/spi.h"
+#    include "SettingsDefinitions.h"
 
 namespace Machine {
     void SPIBus::validate() {
@@ -17,6 +19,7 @@ namespace Machine {
     }
 
     void SPIBus::init() {
+        // XXX FIXME These default pins are correct only for ESP32, not ESP32-S3 and others
         pinnum_t mosiPin = 23;
         pinnum_t misoPin = 19;
         pinnum_t sckPin  = 18;
@@ -35,7 +38,7 @@ namespace Machine {
             log_info("Using default SPI pins");
         }
         // Init in DMA mode
-        if (!spi_init_bus(sckPin, misoPin, mosiPin, true)) {
+        if (!spi_init_bus(sckPin, misoPin, mosiPin, true, _sck.driveStrength(), _mosi.driveStrength())) {
             log_error("SPIBus init failed");
             return;
         }
@@ -69,3 +72,4 @@ namespace Machine {
         return _defined;
     }
 }
+#endif

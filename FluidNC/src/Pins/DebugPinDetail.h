@@ -10,11 +10,10 @@ namespace Pins {
         PinDetail* _implementation;
 
         uint32_t _lastEvent;
-        int      _eventCount;
         bool     _isHigh;
 
         struct CallbackHandler {
-            void (*callback)(void* arg);
+            void (*callback)(void* arg, bool v);
             void*           argument;
             DebugPinDetail* _myPin;
 
@@ -26,19 +25,18 @@ namespace Pins {
         bool shouldEvent();
 
     public:
-        DebugPinDetail(PinDetail* implementation) :
-            PinDetail(implementation->number()), _implementation(implementation), _lastEvent(0), _eventCount(0), _isHigh(false),
-            _isrHandler({ 0 }) {}
+        explicit DebugPinDetail(PinDetail* implementation) :
+            PinDetail(implementation->number()), _implementation(implementation), _lastEvent(0), _isHigh(false), _isrHandler({}) {}
 
         PinCapabilities capabilities() const override { return _implementation->capabilities(); }
 
         // I/O:
-        void          write(int high) override;
-        int           read() override;
-        void          setAttr(PinAttributes value) override;
+        void          write(bool high) override;
+        bool          read() override;
+        void          setAttr(PinAttributes value, uint32_t frequency) override;
         PinAttributes getAttr() const override;
 
-        std::string toString() override { return _implementation->toString(); }
+        const char* name() { return _implementation->name(); }
 
         ~DebugPinDetail() override {}
     };

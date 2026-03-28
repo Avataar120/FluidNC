@@ -2,25 +2,20 @@
 
 #include "MotorDriver.h"
 
-#include <driver/rmt.h>
-
 namespace MotorDrivers {
     class StandardStepper : public MotorDriver {
     public:
-        //StandardStepper(size_t axis_index, Pin step_pin, Pin dir_pin, Pin disable_pin);
+        //StandardStepper(axis_t axis_index, Pin step_pin, Pin dir_pin, Pin disable_pin);
 
-        StandardStepper() = default;
+        StandardStepper(const char* name) : MotorDriver(name) {}
 
         // Overrides for inherited methods
         void init() override;
 
         // No special action, but return true to say homing is possible
         bool set_homing_mode(bool isHoming) override { return true; }
+        bool can_self_home() override { return false; }
         void set_disable(bool) override;
-        void set_direction(bool) override;
-        void step() override;
-        void unstep() override;
-        void read_settings() override;
 
         void init_step_dir_pins();
 
@@ -39,15 +34,5 @@ namespace MotorDrivers {
             handler.item("direction_pin", _dir_pin);
             handler.item("disable_pin", _disable_pin);
         }
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "standard_stepper"; }
-
-    private:
-        // Initialized after configuration for RMT steps:
-        bool _invert_step;
-        bool _invert_disable;
-
-        rmt_channel_t _rmt_chan_num = RMT_CHANNEL_MAX;
     };
 }

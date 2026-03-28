@@ -3,11 +3,9 @@
 
 #pragma once
 
-#include "../Config.h"  // ENABLE_*
-#include "../Channel.h"
+#include "Channel.h"
 
-#ifdef ENABLE_WIFI
-#    include <WiFi.h>
+#include <WiFi.h>
 
 namespace WebUI {
     class TelnetClient : public Channel {
@@ -23,7 +21,7 @@ namespace WebUI {
 
         static const int DISCONNECT_CHECK_COUNTS = 1000;
 
-        int _state = 0;
+        int32_t _state = 0;
 
     public:
         TelnetClient(WiFiClient* wifiClient);
@@ -44,4 +42,3 @@ namespace WebUI {
         ~TelnetClient();
     };
 }
-#endif

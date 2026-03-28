@@ -19,12 +19,12 @@
 namespace Spindles {
     class _10v : public PWM {
     public:
-        _10v() = default;
+        _10v(const char* name) : PWM(name) {}
 
-        _10v(const _10v&) = delete;
-        _10v(_10v&&)      = delete;
+        _10v(const _10v&)            = delete;
+        _10v(_10v&&)                 = delete;
         _10v& operator=(const _10v&) = delete;
-        _10v& operator=(_10v&&) = delete;
+        _10v& operator=(_10v&&)      = delete;
 
         void init() override;
         void config_message() override;
@@ -41,14 +41,11 @@ namespace Spindles {
             PWM::group(handler);
         }
 
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "10V"; }
-
         ~_10v() {}
 
     protected:
         void set_enable(bool enable_pin) override;
-        void set_direction(bool Clockwise);
+        void set_direction(bool Clockwise) override;
 
         Pin _forward_pin;
         Pin _reverse_pin;

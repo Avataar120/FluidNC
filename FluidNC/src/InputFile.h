@@ -21,24 +21,17 @@
 
 class InputFile : public FileStream {
 private:
-    WebUI::AuthenticationLevel _auth_level;
+    Error _pending_error = Error::Ok;
+    void  end_message();
 
-    // The channel that triggered the use of this file, through which
-    // status about the use of this file will be reported.
-    Channel& _out;
-
-    uint32_t _line_num;  // the most recent line number read
-    bool     _readyNext = true;
+    size_t _blank_lines = 0;
 
 public:
-    static std::string _progress;
-
     // fsname is the default file system on which the file is located, in case the path does not specify
     // path is the full path to the file
-    // channel is the I/O channel on which status about the use of this file will be reported
-    InputFile(const char* fsname, const char* path, WebUI::AuthenticationLevel auth_level, Channel& channel);
+    InputFile(const Volume& defaultFs, const char* path);
 
-    InputFile(const InputFile&) = delete;
+    InputFile(const InputFile&)            = delete;
     InputFile& operator=(const InputFile&) = delete;
 
     // readLine() differs from pollLine() in the Channel API as follows:
@@ -52,22 +45,12 @@ public:
     // data, you either get it "immediately" or you get a response
     // saying you will never get it (error or end-of-file).
 
-    Error readLine(char* line, int len);
-
-    // These are used for feedback about the progress of the operation
-    uint32_t getLineNumber() { return _line_num; }
-    float    percent_complete();
-
-    // This tells where to send the feedback
-    Channel& getChannel() { return _out; }
-
-    WebUI::AuthenticationLevel getAuthLevel() { return _auth_level; }
+    Error readLine(char* line, size_t len);
 
     // Channel methods
-    size_t   write(uint8_t c) override { return 0; }
-    void     ack(Error status) override;
-    Channel* pollLine(char* line) override;
-    void     stopJob() override;
+    size_t write(uint8_t c) override { return 0; }
+    void   ack(Error status) override;
+    Error  pollLine(char* line) override;
 
     ~InputFile();
 };

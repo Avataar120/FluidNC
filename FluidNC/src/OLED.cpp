@@ -1,4 +1,5 @@
 #include "OLED.h"
+#include "string_util.h"
 
 #include "Machine/MachineConfig.h"
 
@@ -71,7 +72,12 @@ void OLED::init() {
     _oled = new SSD1306_I2C(_address, _geometry, config->_i2c[_i2c_num], 400000);
     _oled->init();
 
-    _oled->flipScreenVertically();
+    if (_flip) {
+        _oled->flipScreenVertically();
+    }
+    if (_mirror) {
+        _oled->mirrorScreen();
+    }
     _oled->setTextAlignment(TEXT_ALIGN_LEFT);
 
     _oled->clear();
@@ -84,9 +90,9 @@ void OLED::init() {
     setReportInterval(_report_interval_ms);
 }
 
-Channel* OLED::pollLine(char* line) {
+Error OLED::pollLine(char* line) {
     autoReport();
-    return nullptr;
+    return Error::NoData;
 }
 
 void OLED::show_state() {
@@ -103,12 +109,12 @@ void OLED::show_limits(bool probe, const bool* limits) {
     if (_state == "Alarm") {
         return;
     }
-    for (uint8_t axis = X_AXIS; axis < 3; axis++) {
+    for (axis_t axis = X_AXIS; axis < 3; axis++) {
         draw_checkbox(80, 27 + (axis * 10), 7, 7, limits[axis]);
     }
 }
 void OLED::show_file() {
-    int pct = int(_percent);
+    Percent pct = Percent(_percent);
     if (_filename.length() == 0) {
         return;
     }
@@ -142,7 +148,7 @@ void OLED::show_dro(const float* axes, bool isMpos, bool* limits) {
         return;
     }
 
-    auto n_axis = config->_axes->_numberAxis;
+    auto n_axis = Axes::_numberAxis;
     char axisVal[20];
 
     show(limitLabelLayout, "L");
@@ -150,10 +156,10 @@ void OLED::show_dro(const float* axes, bool isMpos, bool* limits) {
 
     _oled->setFont(ArialMT_Plain_10);
     uint8_t oled_y_pos;
-    for (uint8_t axis = X_AXIS; axis < n_axis; axis++) {
+    for (axis_t axis = X_AXIS; axis < n_axis; axis++) {
         oled_y_pos = ((_height == 64) ? 24 : 17) + (axis * 10);
 
-        std::string axis_msg(1, Machine::Axes::_names[axis]);
+        std::string axis_msg(Machine::Axes::axisName(axis));
         if (_width == 128) {
             axis_msg += ":";
         } else {
@@ -190,30 +196,30 @@ void OLED::show_radio_info() {
     }
 }
 
-void OLED::parse_numbers(std::string s, float* nums, int maxnums) {
+void OLED::parse_numbers(std::string s, float* nums, uint8_t maxnums) {
     size_t pos     = 0;
     size_t nextpos = -1;
-    size_t i;
+    size_t i       = 0;
     do {
         if (i >= maxnums) {
             return;
         }
-        nextpos   = s.find_first_of(",", pos);
-        auto num  = s.substr(pos, nextpos - pos);
-        nums[i++] = std::strtof(num.c_str(), nullptr);
-        pos       = nextpos + 1;
+        nextpos  = s.find_first_of(",", pos);
+        auto num = s.substr(pos, nextpos - pos);
+        string_util::from_float(num, nums[i++]);
+        pos = nextpos + 1;
     } while (nextpos != std::string::npos);
 }
 
 void OLED::parse_axes(std::string s, float* axes) {
     size_t pos     = 0;
     size_t nextpos = -1;
-    size_t axis    = 0;
+    axis_t axis    = X_AXIS;
     do {
         nextpos  = s.find_first_of(",", pos);
         auto num = s.substr(pos, nextpos - pos);
         if (axis < MAX_N_AXIS) {
-            axes[axis++] = std::strtof(num.c_str(), nullptr);
+            string_util::from_float(num, axes[axis++]);
         }
         pos = nextpos + 1;
     } while (nextpos != std::string::npos);
@@ -234,6 +240,7 @@ void OLED::parse_status_report() {
     float axes[MAX_N_AXIS];
     bool  isMpos = false;
     _filename    = "";
+    uint32_t linenum;
 
     // ... handle it
     while (nextpos != std::string::npos) {
@@ -262,7 +269,7 @@ void OLED::parse_status_report() {
         }
         if (tag == "Ln") {
             // n
-            auto linenum = std::strtol(value.c_str(), nullptr, 10);
+            string_util::from_decimal(value, linenum);
             continue;
         }
         if (tag == "FS") {
@@ -316,9 +323,10 @@ void OLED::parse_status_report() {
         }
         if (tag == "A") {
             // SCFM
-            int  spindle = 0;
-            bool flood   = false;
-            bool mist    = false;
+            /* Unused.
+            uint8_t spindle = 0;
+            bool    flood   = false;
+            bool    mist    = false;
             for (char const& c : value) {
                 switch (c) {
                     case 'S':
@@ -335,12 +343,13 @@ void OLED::parse_status_report() {
                         break;
                 }
             }
+            */
             continue;
         }
         if (tag == "SD") {
             auto commaPos = value.find_first_of(",");
-            _percent      = std::strtof(value.substr(0, commaPos).c_str(), nullptr);
-            _filename     = value.substr(commaPos + 1);
+            string_util::from_float(value.substr(0, commaPos), _percent);
+            _filename = value.substr(commaPos + 1);
             continue;
         }
     }
@@ -390,7 +399,6 @@ void OLED::parse_STA() {
     _radio_info  = _report.substr(start, _report.size() - start - 1);
 
     _oled->clear();
-    auto fh = font_height(ArialMT_Plain_10);
     wrapped_draw_string(0, _radio_info, ArialMT_Plain_10);
     _oled->display();
 }
@@ -405,7 +413,7 @@ void OLED::parse_IP() {
     wrapped_draw_string(0, _radio_info, ArialMT_Plain_10);
     wrapped_draw_string(fh * 2, _radio_addr, ArialMT_Plain_10);
     _oled->display();
-    delay_msec(_radio_delay);
+    dwell_ms(_radio_delay, DwellMode::SysSuspend);
 }
 
 // [MSG:INFO: AP SSID foo IP 192.168.68.134 mask foo channel foo]
@@ -424,7 +432,7 @@ void OLED::parse_AP() {
     wrapped_draw_string(0, _radio_info, ArialMT_Plain_10);
     wrapped_draw_string(fh * 2, _radio_addr, ArialMT_Plain_10);
     _oled->display();
-    delay_msec(_radio_delay);
+    dwell_ms(_radio_delay, DwellMode::SysSuspend);
 }
 
 void OLED::parse_BT() {
@@ -436,7 +444,7 @@ void OLED::parse_BT() {
     _oled->clear();
     wrapped_draw_string(0, _radio_info, ArialMT_Plain_10);
     _oled->display();
-    delay_msec(_radio_delay);
+    dwell_ms(_radio_delay, DwellMode::SysSuspend);
 }
 
 void OLED::parse_WebUI() {
@@ -520,7 +528,7 @@ struct xfont_t {
 };
 size_t OLED::char_width(char c, font_t font) {
     xfont_t* xf    = (xfont_t*)font;
-    int      index = c - xf->first;
+    int16_t  index = c - xf->first;
     return (index < 0) ? 0 : xf->glyphs[index].width;
 }
 
@@ -552,3 +560,5 @@ void OLED::draw_checkbox(int16_t x, int16_t y, int16_t width, int16_t height, bo
         _oled->drawRect(x, y, width, height);  // If log.1
     }
 }
+
+ConfigurableModuleFactory::InstanceBuilder<OLED> oled_module __attribute__((init_priority(104))) ("oled");

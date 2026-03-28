@@ -9,7 +9,7 @@
      enable_pin : optional.
      output_cw_pin : Clockwise PWM signal
      output_ccw_pin : Counter Clockwise PWM signal
-     When the output CW is toggling, CCW is set LOW, and viceversa.
+     When the output CW is toggling, CCW is set LOW, and vice-versa.
 
      Features which could be added afterwards:
 
@@ -23,7 +23,6 @@
 */
 
 #include "Spindle.h"
-#include "Driver/PwmPin.h"
 
 #include <cstdint>
 
@@ -31,16 +30,16 @@ namespace Spindles {
     // This adds support for PWM H-Bridge Spindles
     class HBridge : public Spindle {
     public:
-        HBridge() = default;
+        HBridge(const char* name) : Spindle(name) {}
 
         // PWM(Pin&& output, Pin&& enable, Pin&& direction, uint32_t minRpm, uint32_t maxRpm) :
         //     _min_rpm(minRpm), _max_rpm(maxRpm), _output_pin(std::move(output)), _enable_pin(std::move(enable)),
         //     _direction_pin(std::move(direction)) {}
 
-        HBridge(const HBridge&) = delete;
-        HBridge(HBridge&&)      = delete;
+        HBridge(const HBridge&)            = delete;
+        HBridge(HBridge&&)                 = delete;
         HBridge& operator=(const HBridge&) = delete;
-        HBridge& operator=(HBridge&&) = delete;
+        HBridge& operator=(HBridge&&)      = delete;
 
         void init() override;
         void setSpeedfromISR(uint32_t dev_speed) override;
@@ -60,19 +59,15 @@ namespace Spindles {
             // At the other end, the minimum useful precision is 2^2
             // or 4 levels of control, so the max is 80MHz/2^2 = 20MHz.
             // Those might not be practical for many CNC applications,
-            // but the ESP32 hardware can handle them, so we let the
+            // but the hardware can handle them, so we let the
             // user choose.
             handler.item("pwm_hz", _pwm_freq, 1, 20000000);
             handler.item("output_cw_pin", _output_cw_pin);
             handler.item("output_ccw_pin", _output_ccw_pin);
             handler.item("enable_pin", _enable_pin);
-            handler.item("disable_with_s0", _disable_with_zero_speed);
 
             Spindle::group(handler);
         }
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "HBridge"; }
 
         virtual ~HBridge() {}
 
@@ -80,8 +75,6 @@ namespace Spindles {
         // TODO: A/B rename
         int32_t      _current_pwm_duty;
         SpindleState _current_state      = SpindleState::Unknown;
-        PwmPin*      _pwm_cw             = nullptr;
-        PwmPin*      _pwm_ccw            = nullptr;
         bool         _duty_update_needed = false;
 
         // _disable_with_zero_speed forces a disable when speed is 0

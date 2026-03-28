@@ -9,7 +9,7 @@
 // Returns 1 if we have a valid sequence, and value is set
 // Returns 0 if we are in the middle of a sequence
 // Returns -1 if there is a sequence error
-int UTF8::decode(uint8_t ch, uint32_t& value) {
+int8_t UTF8::decode(uint8_t ch, uint32_t& value) {
     if (_state) {
         if ((ch & 0xc0) != 0x80) {
             // Trailing bytes in a sequence must have 10 in the two high bits
@@ -70,10 +70,10 @@ int UTF8::decode(uint8_t ch, uint32_t& value) {
     return -1;
 }
 bool UTF8::decode(const std::vector<uint8_t>& input, uint32_t& value) {
-    int len = input.size();
-    for (auto& ch : input) {
+    size_t len = input.size();
+    for (auto const& ch : input) {
         --len;
-        int result = decode(ch, value);
+        int32_t result = decode(ch, value);
         if (result == -1) {
             return false;
         }
@@ -84,13 +84,14 @@ bool UTF8::decode(const std::vector<uint8_t>& input, uint32_t& value) {
     // Reached end of input without finishing the decode
     return false;
 }
+// cppcheck-suppress unusedFunction
 std::vector<uint8_t> UTF8::encode(const uint32_t value) {
     std::vector<uint8_t> output;
     if (value >= 0x110000) {
         // In this case, the returned vector will be empty
         return output;
     }
-    if (value >= 0x100000) {
+    if (value >= 0x10000) {
         output.push_back(0xf0 | ((value >> 18) & 0x07));
         output.push_back(0x80 | ((value >> 12) & 0x3f));
         output.push_back(0x80 | ((value >> 6) & 0x3f));
@@ -177,5 +178,6 @@ void test_UTF8() {
     delete utf8;
 }
 #else
+// cppcheck-suppress unusedFunction
 void test_UTF8() {}
 #endif

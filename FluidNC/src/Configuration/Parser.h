@@ -5,9 +5,9 @@
 #pragma once
 
 #include "Tokenizer.h"
-#include "../Pin.h"
-#include "../EnumItem.h"
-#include "../UartTypes.h"
+#include "Pin.h"
+#include "EnumItem.h"
+#include "UartTypes.h"
 #include "HandlerBase.h"
 
 #include <stack>
@@ -16,21 +16,20 @@
 
 namespace Configuration {
     class Parser : public Tokenizer {
-        void parseError(const char* description) const;
-
     public:
-        Parser(std::string_view yaml_string);
+        explicit Parser(std::string_view yaml_string);
 
         bool is(const char* expected);
 
         std::string_view        stringValue() const;
         bool                    boolValue() const;
-        int                     intValue() const;
+        int32_t                 intValue() const;
         uint32_t                uintValue() const;
         std::vector<speedEntry> speedEntryValue() const;
+        std::vector<float>      floatArray() const;
         float                   floatValue() const;
         Pin                     pinValue() const;
-        int                     enumValue(EnumItem* e) const;
+        uint32_t                enumValue(const EnumItem* e) const;
         IPAddress               ipValue() const;
         void                    uartMode(UartData& wordLength, UartParity& parity, UartStop& stopBits) const;
     };

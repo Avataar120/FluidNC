@@ -1,7 +1,5 @@
 #include "OnOffSpindle.h"
-
-#include "../System.h"  // sys.abort
-#include "../Report.h"  // report_ovr_counter
+#include "System.h"  // sys.abort
 
 namespace Spindles {
 
@@ -24,27 +22,23 @@ namespace Spindles {
             linearSpeeds(1, 100.0f);
         }
         setupSpeeds(1);
+        init_atc();
         config_message();
     }
 
     // prints the startup message of the spindle config
     void OnOff ::config_message() {
-        log_info(name() << " Spindle Ena:" << _enable_pin.name() << " Out:" << _output_pin.name() << " Dir:" << _direction_pin.name());
+        log_info(name() << " Spindle Ena:" << _enable_pin.name() << " Out:" << _output_pin.name() << " Dir:" << _direction_pin.name()
+                        << atc_info());
     }
 
     void OnOff::setState(SpindleState state, SpindleSpeed speed) {
-        if (sys.abort) {
+        if (sys.abort()) {
             return;  // Block during abort.
         }
 
-        // We always use mapSpeed() with the unmodified input speed so it sets
-        // sys.spindle_speed correctly.
-        uint32_t dev_speed = mapSpeed(speed);
-        if (state == SpindleState::Disable) {  // Halt or set spindle direction and speed.
-            if (_zero_speed_with_disable) {
-                dev_speed = offSpeed();
-            }
-        } else {
+        uint32_t dev_speed = mapSpeed(state, speed);
+        if (state != SpindleState::Disable) {  // Halt or set spindle direction and speed.
             // XXX this could wreak havoc if the direction is changed without first
             // spinning down.
             set_direction(state == SpindleState::Cw);
@@ -54,19 +48,25 @@ namespace Spindles {
         spindleDelay(state, speed);
     }
 
-    void IRAM_ATTR OnOff::set_output(uint32_t dev_speed) { _output_pin.synchronousWrite(dev_speed != 0); }
+    void IRAM_ATTR OnOff::set_output(uint32_t dev_speed) {
+        _output_pin.synchronousWrite(dev_speed != 0);
+    }
 
-    void IRAM_ATTR OnOff::setSpeedfromISR(uint32_t dev_speed) { set_output(dev_speed != 0); }
+    void IRAM_ATTR OnOff::setSpeedfromISR(uint32_t dev_speed) {
+        set_output(dev_speed != 0);
+    }
 
     void IRAM_ATTR OnOff::set_enable(bool enable) {
-        if (_disable_with_zero_speed && sys.spindle_speed == 0) {
+        if (_disable_with_zero_speed && sys.spindle_speed() == 0) {
             enable = false;
         }
 
         _enable_pin.synchronousWrite(enable);
     }
 
-    void OnOff::set_direction(bool Clockwise) { _direction_pin.synchronousWrite(Clockwise); }
+    void OnOff::set_direction(bool Clockwise) {
+        _direction_pin.synchronousWrite(Clockwise);
+    }
 
     void OnOff::deinit() {
         stop();

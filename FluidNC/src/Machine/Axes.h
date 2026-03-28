@@ -4,9 +4,8 @@
 
 #pragma once
 
-#include "../Configuration/Configurable.h"
+#include "Configuration/Configurable.h"
 #include "Axis.h"
-#include "../EnumItem.h"
 
 namespace MotorDrivers {
     class MotorDriver;
@@ -17,7 +16,9 @@ namespace Machine {
         bool _switchedStepper = false;
 
     public:
-        static constexpr const char* _names = "XYZABC";
+        static const char* _axisNames[];
+
+        //        static constexpr const char* _names = "XYZABC";
 
         Axes();
 
@@ -29,25 +30,35 @@ namespace Machine {
 
         static AxisMask homingMask;
 
-        Pin _sharedStepperDisable;
-        Pin _sharedStepperReset;
+        static bool disabled;
 
-        inline char axisName(int index) { return index < MAX_N_AXIS ? _names[index] : '?'; }  // returns axis letter
+        static Pin _sharedStepperDisable;
+        static Pin _sharedStepperReset;
 
-        static inline size_t    motor_bit(size_t axis, size_t motor) { return motor ? axis + 16 : axis; }
+        static uint32_t _homing_runs;  // Number of Approach/Pulloff cycles
+
+        static axis_t axisNum(std::string_view axis_name);
+
+        static inline const char* axisName(axis_t axis) {  // returns axis letter as C string
+            return axis < MAX_N_AXIS ? _axisNames[axis] : "?";
+        }
+
+        static inline size_t    motor_bit(axis_t axis, motor_t motor) { return motor ? size_t(axis) + 16 : size_t(axis); }
         static inline AxisMask  motors_to_axes(MotorMask motors) { return (motors & 0xffff) | (motors >> 16); }
         static inline MotorMask axes_to_motors(AxisMask axes) { return axes | (axes << 16); }
 
-        int   _numberAxis = 0;
-        Axis* _axis[MAX_N_AXIS];
+        static axis_t _numberAxis;
+        static Axis*  _axis[MAX_N_AXIS];
 
         // Some small helpers to find the axis index and axis motor number for a given motor. This
         // is helpful for some motors that need this info, as well as debug information.
-        size_t findAxisIndex(const MotorDrivers::MotorDriver* const motor) const;
-        size_t findAxisMotor(const MotorDrivers::MotorDriver* const motor) const;
+        static axis_t  findAxisIndex(const MotorDrivers::MotorDriver* const motor);
+        static motor_t findAxisMotor(const MotorDrivers::MotorDriver* const motor);
+
+        static MotorMask hardLimitMask();
 
         inline bool hasHardLimits() const {
-            for (int axis = 0; axis < _numberAxis; ++axis) {
+            for (axis_t axis = X_AXIS; axis < _numberAxis; ++axis) {
                 auto a = _axis[axis];
 
                 for (int motor = 0; motor < Axis::MAX_MOTORS_PER_AXIS; ++motor) {
@@ -60,23 +71,21 @@ namespace Machine {
             return false;
         }
 
-        void init();
+        static void init();
 
         // These are used during homing cycles.
         // The return value is a bitmask of axes that can home
-        MotorMask set_homing_mode(AxisMask homing_mask, bool isHoming);
+        static MotorMask set_homing_mode(AxisMask homing_mask, bool isHoming);
 
-        void set_disable(int axis, bool disable);
-        void set_disable(bool disable);
-        void step(uint8_t step_mask, uint8_t dir_mask);
-        void unstep();
-        void config_motors();
+        static void set_disable(axis_t axis, bool disable);
+        static void set_disable(bool disable);
+        static void config_motors();
 
-        std::string maskToNames(AxisMask mask);
+        static std::string maskToNames(AxisMask mask);
 
-        bool namesToMask(const char* names, AxisMask& mask);
+        static bool namesToMask(const char* names, AxisMask& mask);
 
-        std::string motorMaskToNames(MotorMask mask);
+        static std::string motorMaskToNames(MotorMask mask);
 
         // Configuration helpers:
         void group(Configuration::HandlerBase& handler) override;
@@ -85,4 +94,3 @@ namespace Machine {
         ~Axes();
     };
 }
-extern EnumItem axisType[];

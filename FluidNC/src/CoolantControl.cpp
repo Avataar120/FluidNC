@@ -70,13 +70,13 @@ void CoolantControl::stop() {
 // parser program end, and g-code parser CoolantControl::sync().
 
 void CoolantControl::set_state(CoolantState state) {
-    if (sys.abort || (_previous_state.Mist == state.Mist && _previous_state.Flood == state.Flood)) {
+    if (sys.abort() || (_previous_state.Mist == state.Mist && _previous_state.Flood == state.Flood)) {
         return;  // Block during abort or if no change
     }
     write(state);
 
     if (state.Mist || state.Flood)  // ignore delay on turn off
-        delay_msec(_delay_ms, DwellMode::SysSuspend);
+        dwell_ms(_delay_ms, DwellMode::SysSuspend);
 }
 
 void CoolantControl::off() {

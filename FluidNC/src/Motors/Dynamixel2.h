@@ -8,9 +8,10 @@
 */
 
 #include "Servo.h"
-#include "../Pin.h"
+#include "Pin.h"
+#include "System.h"
 
-#include "../Uart.h"
+#include "Uart.h"
 
 #include <cstdint>
 
@@ -21,9 +22,9 @@ namespace MotorDrivers {
 
         void set_location();
 
-        uint8_t _id;
+        uint8_t _id = 255;
 
-        static int _timer_ms;
+        static int32_t _timer_ms;  // SdB: TODO FIXME This is asking for trouble; timer_ms is a name in Servo as well.
 
         static uint8_t _tx_message[100];  // outgoing to dynamixel
         static uint8_t _msg_index;
@@ -39,11 +40,10 @@ namespace MotorDrivers {
         void finish_write();
         void show_status();
 
-        bool     test();
-        uint32_t dxl_read_position();
-        void     dxl_read(uint16_t address, uint16_t data_len);
+        bool test();
+        void dxl_read(uint16_t address, uint16_t data_len);
 
-        void dxl_goal_position(int32_t position);  // set one motor
+        void dxl_goal_position(uint32_t position);  // set one motor
         void set_operating_mode(uint8_t mode);
         void LED_on(bool on);
 
@@ -55,11 +55,11 @@ namespace MotorDrivers {
 
         static std::vector<Dynamixel2*> _instances;
 
-        int _axis_index;
+        axis_t _axis;
 
         static Uart* _uart;
 
-        int _uart_num = -1;
+        int32_t _uart_num = -1;
 
         static bool _uart_started;
 
@@ -99,27 +99,29 @@ namespace MotorDrivers {
         uint32_t _countMin = 1024;
         uint32_t _countMax = 3072;
 
-        bool        _disabled;
+        steps_t _min_steps;
+        steps_t _max_steps;
+
+        bool        _disabled = true;
         static bool _has_errors;
 
+        void add_position_to_message();
+
     public:
-        Dynamixel2() : _id(255), _disabled(true) {}
+        Dynamixel2(const char* name) : Servo(name) {}
 
         // Overrides for inherited methods
         void        init() override;
-        void        read_settings() override;
         bool        set_homing_mode(bool isHoming) override;
         void        set_disable(bool disable) override;
         void        update() override;
         static void update_all();
         void        config_motor() override;
 
-        const char* name() override { return "dynamixel2"; }
-
         // Configuration handlers:
         void validate() override {
             Assert(_uart_num != -1, "Dynamixel: Missing uart_num configuration");
-            Assert(_id != 255, "Dynamixel: ID must be configured.");
+            Assert(_id != 255, "Dynamixel: ID must be configured");
         }
 
         void group(Configuration::HandlerBase& handler) override {
@@ -131,8 +133,5 @@ namespace MotorDrivers {
 
             Servo::group(handler);
         }
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "dynamixel2"; }
     };
 }

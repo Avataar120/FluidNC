@@ -8,15 +8,16 @@
 class Event {
 public:
     Event() {}
-    virtual void run(void* arg) = 0;
+    virtual void run(void* arg) const = 0;
+    virtual ~Event() {}
 };
 
 class NoArgEvent : public Event {
     void (*_function)() = nullptr;
 
 public:
-    NoArgEvent(void (*function)()) : _function(function) {}
-    void run(void* arg) override {
+    explicit NoArgEvent(void (*function)()) : _function(function) {}
+    void run(void* arg) const override {
         if (_function) {
             _function();
         }
@@ -27,8 +28,8 @@ class ArgEvent : public Event {
     void (*_function)(void*) = nullptr;
 
 public:
-    ArgEvent(void (*function)(void*)) : _function(function) {}
-    void run(void* arg) override {
+    explicit ArgEvent(void (*function)(void*)) : _function(function) {}
+    void run(void* arg) const override {
         if (_function) {
             _function(arg);
         }

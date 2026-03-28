@@ -35,30 +35,28 @@
 
 #include "Solenoid.h"
 
-#include "../Machine/MachineConfig.h"
-#include "../System.h"      // mpos_to_steps() etc
+#include "Machine/MachineConfig.h"
+#include "System.h"         // motor_pos_to_steps() etc
 #include "Driver/PwmPin.h"  // pwmInit(), etc.
-#include "../Pin.h"
-#include "../Limits.h"  // limitsMaxPosition
-
-#include <freertos/task.h>  // vTaskDelay
+#include "Pin.h"
 
 namespace MotorDrivers {
 
     void Solenoid::init() {
         if (_output_pin.undefined()) {
-            log_warn("    Solenoid disabled: No output pin");
+            log_config_error("    Solenoid disabled: No output pin");
             _has_errors = true;
             return;  // We cannot continue without the output pin
         }
 
-        _axis_index = axis_index();
+        _axis = axis_index();
 
-        _pwm = new PwmPin(_output_pin, _pwm_freq);  // Allocate a channel
+        _output_pin.setAttr(Pin::Attr::PWM, _pwm_freq);
 
-        pwm_cnt[SolenoidMode::Off]  = uint32_t(_off_percent / 100.0f * _pwm->period());
-        pwm_cnt[SolenoidMode::Pull] = uint32_t(_pull_percent / 100.0f * _pwm->period());
-        pwm_cnt[SolenoidMode::Hold] = uint32_t(_hold_percent / 100.0f * _pwm->period());
+        auto max_duty               = _output_pin.maxDuty();
+        pwm_cnt[SolenoidMode::Off]  = uint32_t(_off_percent * max_duty / 100.0f);
+        pwm_cnt[SolenoidMode::Pull] = uint32_t(_pull_percent * max_duty / 100.0f);
+        pwm_cnt[SolenoidMode::Hold] = uint32_t(_hold_percent * max_duty / 100.0f);
 
         config_message();
 
@@ -67,11 +65,13 @@ namespace MotorDrivers {
         schedule_update(this, _update_rate_ms);
     }
 
-    void Solenoid::update() { set_location(); }
+    void Solenoid::update() {
+        set_location();
+    }
 
     void Solenoid::config_message() {
         log_info("    " << name() << " Pin: " << _output_pin.name() << " Off: " << _off_percent << " Hold: " << _hold_percent << " Pull:"
-                        << _pull_percent << " Duration:" << _pull_ms << " pwm hz:" << _pwm->frequency() << " period:" << _pwm->frequency());
+                        << _pull_percent << " Duration:" << _pull_ms << " pwm hz:" << _pwm_freq << " period:" << _output_pin.maxDuty());
     }
 
     void Solenoid::set_location() {
@@ -81,7 +81,7 @@ namespace MotorDrivers {
             return;
         }
 
-        float mpos = steps_to_mpos(get_axis_motor_steps(_axis_index), _axis_index);  // get the axis machine position in mm
+        float mpos = steps_to_motor_pos(get_axis_steps(_axis), _axis);  // get the axis machine position in mm
 
         _dir_invert ? is_solenoid_on = (mpos < 0.0) : is_solenoid_on = (mpos > 0.0);
 

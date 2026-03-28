@@ -16,15 +16,15 @@
 namespace MotorDrivers {
     class Servo : public MotorDriver {
     public:
-        Servo();
+        Servo(const char* name) : MotorDriver(name) {}
 
         virtual void update() = 0;  // This must be implemented by derived classes
         void         group(Configuration::HandlerBase& handler) override {}
 
-        virtual const char* name() = 0;  // This must be implemented by derived classes
+        bool can_self_home() override { return true; }
 
     protected:
         static void update_servo(TimerHandle_t timer);
-        static void schedule_update(Servo* object, int interval);
+        static void schedule_update(Servo* object, uint32_t interval);
     };
 }

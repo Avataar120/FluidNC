@@ -26,9 +26,14 @@ void Status_Outputs::init() {
         _Alarm_pin.setAttr(Pin::Attr::Output);
     }
 
+    if(_Door_pin.defined())
+    {
+        _Door_pin.setAttr(Pin::Attr::Output);
+    }
+
     log_info("Status outputs"
              << " Interval:" << _report_interval_ms << " Idle:" << _Idle_pin.name() << " Cycle:" << _Run_pin.name()
-             << " Hold:" << _Hold_pin.name() << " Alarm:" << _Alarm_pin.name());
+             << " Hold:" << _Hold_pin.name() << " Alarm:" << _Alarm_pin.name()<< "Door:" << _Door_pin.name()) ;
 
     allChannels.registration(this);
     setReportInterval(_report_interval_ms);
@@ -56,9 +61,9 @@ size_t Status_Outputs::write(uint8_t data) {
     return 1;
 }
 
-Channel* Status_Outputs::pollLine(char* line) {
+Error Status_Outputs::pollLine(char* line) {
     autoReport();
-    return nullptr;
+    return Error::NoData;
 }
 
 void Status_Outputs::parse_status_report() {
@@ -74,4 +79,10 @@ void Status_Outputs::parse_status_report() {
     _Run_pin.write(_state == "Run");
     _Hold_pin.write(_state.substr(0, 4) == "Hold");
     _Alarm_pin.write(_state == "Alarm");
+    _Door_pin.write(_state.substr(0,4) == "Door");
+}
+
+// Configuration registration
+namespace {
+    ConfigurableModuleFactory::InstanceBuilder<Status_Outputs> registration("status_outputs");
 }

@@ -6,9 +6,8 @@
     compensation. Use the Laser class for that.
 */
 #include "PWMSpindle.h"
-
-#include "../System.h"  // sys
-#include "../GCode.h"   // gc_state.modal
+#include "System.h"  // sys
+#include "GCode.h"   // gc_state.modal
 
 // ======================= PWM ==============================
 /*
@@ -22,10 +21,9 @@ namespace Spindles {
 
         if (_output_pin.defined()) {
             if (_output_pin.capabilities().has(Pin::Capabilities::PWM)) {
-                auto outputNative = _output_pin.getNative(Pin::Capabilities::PWM);
-                _pwm              = new PwmPin(_output_pin, _pwm_freq);
+                _output_pin.setAttr(Pin::Attr::PWM, _pwm_freq);
             } else {
-                log_error(name() << " output pin " << _output_pin.name().c_str() << " cannot do PWM");
+                log_error(name() << " output pin " << _output_pin.name() << " cannot do PWM");
             }
         } else {
             log_error(name() << " output pin not defined");
@@ -41,7 +39,8 @@ namespace Spindles {
             // The default speed map for a PWM spindle is linear from 0=0% to 10000=100%
             linearSpeeds(10000, 100.0f);
         }
-        setupSpeeds(_pwm->period());
+        setupSpeeds(_output_pin.maxDuty());
+        init_atc();
         config_message();
     }
 
@@ -52,22 +51,16 @@ namespace Spindles {
 
     // XXX this is the same as OnOff::setState so it might be possible to combine them
     void PWM::setState(SpindleState state, SpindleSpeed speed) {
-        if (sys.abort) {
+        if (sys.abort()) {
             return;  // Block during abort.
         }
 
         if (!_output_pin.defined()) {
-            log_warn(name() << " spindle output_pin not defined");
+            log_config_error(name() << " spindle output_pin not defined");
         }
 
-        // We always use mapSpeed() with the unmodified input speed so it sets
-        // sys.spindle_speed correctly.
-        uint32_t dev_speed = mapSpeed(speed);
-        if (state == SpindleState::Disable) {  // Halt or set spindle direction and speed.
-            if (_zero_speed_with_disable) {
-                dev_speed = offSpeed();
-            }
-        } else {
+        uint32_t dev_speed = mapSpeed(state, speed);
+        if (state != SpindleState::Disable) {  // Halt or set spindle direction and speed.
             // XXX this could wreak havoc if the direction is changed without first
             // spinning down.
             set_direction(state == SpindleState::Cw);
@@ -92,31 +85,23 @@ namespace Spindles {
     // prints the startup message of the spindle config
     void PWM::config_message() {
         log_info(name() << " Spindle Ena:" << _enable_pin.name() << " Out:" << _output_pin.name() << " Dir:" << _direction_pin.name()
-                        << " Freq:" << _pwm->frequency() << "Hz Period:" << _pwm->period()
+                        << " Freq:" << _pwm_freq << "Hz Period:" << _output_pin.maxDuty() << atc_info()
 
         );
     }
 
     void IRAM_ATTR PWM::set_output(uint32_t duty) {
-        if (!_pwm) {
-            return;
-        }
-
         // to prevent excessive calls to pwmSetDuty, make sure duty has changed
         if (duty == _current_pwm_duty) {
             return;
         }
 
         _current_pwm_duty = duty;
-        _pwm->setDuty(duty);
+        _output_pin.setDuty(duty);
     }
 
     void PWM::deinit() {
         stop();
-        if (_pwm) {
-            delete _pwm;
-            _pwm = nullptr;
-        }
         _output_pin.setAttr(Pin::Attr::Input);
         _enable_pin.setAttr(Pin::Attr::Input);
         _direction_pin.setAttr(Pin::Attr::Input);

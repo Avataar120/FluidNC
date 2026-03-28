@@ -7,7 +7,7 @@
 #include "Machine/Macros.h"  // macro0Event
 
 Control::Control() {
-    // The SafetyDoor pin must be defined first because it is checked explicity in safety_door_ajar()
+    // The SafetyDoor pin must be defined first because it is checked explicitly in safety_door_ajar()
     _pins.push_back(new ControlPin(&safetyDoorEvent, "safety_door_pin", 'D'));
     _pins.push_back(new ControlPin(&rtResetEvent, "reset_pin", 'R'));
     _pins.push_back(new ControlPin(&feedHoldEvent, "feed_hold_pin", 'H'));
@@ -18,7 +18,7 @@ Control::Control() {
     _pins.push_back(new ControlPin(&macro3Event, "macro3_pin", '3'));
     _pins.push_back(new ControlPin(&faultPinEvent, "fault_pin", 'F'));
     _pins.push_back(new ControlPin(&faultPinEvent, "estop_pin", 'E'));
-    _pins.push_back(new ControlPin(&PowerDetectionEvent, "power_pin", 'W'));
+    _pins.push_back(new ControlPin(&homingButtonEvent, "homing_button_pin", 'O'));
 }
 
 void Control::init() {
@@ -29,7 +29,7 @@ void Control::init() {
 
 void Control::group(Configuration::HandlerBase& handler) {
     for (auto pin : _pins) {
-        handler.item(pin->_legend.c_str(), pin->_pin);
+        handler.item(pin->legend(), *pin);
     }
 }
 
@@ -43,6 +43,16 @@ std::string Control::report_status() {
     return ret;
 }
 
+bool Control::pins_block_unlock() {
+    std::string blockers("FE");  // Fault, E-Stop block unlock and homing
+    for (auto pin : _pins) {
+        if (pin->get() && blockers.find(pin->letter()) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Control::stuck() {
     for (auto pin : _pins) {
         if (pin->get()) {
@@ -50,17 +60,6 @@ bool Control::stuck() {
         }
     }
     return false;
-}
-
-bool Control::startup_check() {
-    bool ret = false;
-    for (auto pin : _pins) {
-        if (pin->get()) {
-            log_error(pin->_legend << " is active at startup");
-            ret = true;
-        }
-    }
-    return ret;
 }
 
 // Returns if safety door is ajar(T) or closed(F), based on pin state.

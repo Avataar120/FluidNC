@@ -18,22 +18,22 @@
 namespace Kinematics {
     class CoreXY : public Cartesian {
     public:
-        CoreXY() = default;
+        CoreXY(const char* name) : Cartesian(name) {}
 
-        CoreXY(const CoreXY&) = delete;
-        CoreXY(CoreXY&&)      = delete;
+        CoreXY(const CoreXY&)            = delete;
+        CoreXY(CoreXY&&)                 = delete;
         CoreXY& operator=(const CoreXY&) = delete;
-        CoreXY& operator=(CoreXY&&) = delete;
+        CoreXY& operator=(CoreXY&&)      = delete;
 
         // Kinematic Interface
 
         virtual void init() override;
         bool         cartesian_to_motors(float* target, plan_line_data_t* pl_data, float* position) override;
-        void         motors_to_cartesian(float* cartesian, float* motors, int n_axis) override;
+        void         motors_to_cartesian(float* cartesian, float* motors, axis_t n_axis) override;
 
         bool canHome(AxisMask axisMask) override;
         void releaseMotors(AxisMask axisMask, MotorMask motors) override;
-        bool limitReached(AxisMask& axisMask, MotorMask& motors, MotorMask limited);
+        bool limitReached(AxisMask& axisMask, MotorMask& motors, MotorMask limited) override;
 
         // Configuration handlers:
         void         validate() override {}
@@ -41,9 +41,6 @@ namespace Kinematics {
         void         afterParse() override {}
 
         bool transform_cartesian_to_motors(float* motors, float* cartesian) override;
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        virtual const char* name() const override { return "CoreXY"; }
 
         ~CoreXY() {}
 

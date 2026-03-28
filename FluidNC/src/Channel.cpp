@@ -5,9 +5,27 @@
 #include "Report.h"                 // report_gcode_modes
 #include "Machine/MachineConfig.h"  // config
 #include "RealtimeCmd.h"            // execute_realtime_command
-#include "Limits.h"
+#include "Limit.h"
 #include "Logging.h"
+#include "Job.h"
 #include <string_view>
+#include <algorithm>
+
+Channel::Channel(const std::string& name, bool addCR) : _name(name), _linelen(0), _addCR(addCR) {}
+Channel::Channel(const char* name, bool addCR) : _name(name), _linelen(0), _addCR(addCR) {}
+Channel::Channel(const char* name, objnum_t num, bool addCR) : _name(name) {
+    _name += std::to_string(num);
+    _linelen = 0;
+    _addCR   = addCR;
+}
+
+void Channel::pause() {
+    _paused = true;
+}
+
+void Channel::resume() {
+    _paused = false;
+}
 
 void Channel::flushRx() {
     _linelen   = 0;
@@ -78,7 +96,7 @@ uint32_t Channel::setReportInterval(uint32_t ms) {
     return actual;
 }
 static bool motionState() {
-    return sys.state == State::Cycle || sys.state == State::Homing || sys.state == State::Jog;
+    return state_is(State::Cycle) || state_is(State::Homing) || state_is(State::Jog);
 }
 
 void Channel::autoReportGCodeState() {
@@ -92,30 +110,31 @@ void Channel::autoReportGCodeState() {
         // Force the compare to succeed if the only change is the motion mode
         _lastModal.motion = gc_state.modal.motion;
     }
-    if (memcmp(&_lastModal, &gc_state.modal, sizeof(_lastModal)) || _lastTool != gc_state.tool ||
+    if (memcmp(&_lastModal, &gc_state.modal, sizeof(_lastModal)) || _lastTool != gc_state.selected_tool ||
         (!motionState() && (_lastSpindleSpeed != gc_state.spindle_speed || _lastFeedRate != gc_state.feed_rate))) {
         report_gcode_modes(*this);
         memcpy(&_lastModal, &gc_state.modal, sizeof(_lastModal));
-        _lastTool         = gc_state.tool;
+        _lastTool         = gc_state.selected_tool;
         _lastSpindleSpeed = gc_state.spindle_speed;
         _lastFeedRate     = gc_state.feed_rate;
     }
 }
 void Channel::autoReport() {
     if (_reportInterval) {
-        auto probeState = config->_probe->get_state();
-        if (probeState != _lastProbe) {
-            report_recompute_pin_string();
-        }
-        if (_reportWco || sys.state != _lastState || probeState != _lastProbe || _lastPinString != report_pin_string ||
-            (motionState() && (int32_t(xTaskGetTickCount()) - _nextReportTime) >= 0)) {
+        const char* stateName = state_name();
+        if (_reportOvr || _reportWco || stateName != _lastStateName || _lastPinString != report_pin_string ||
+            (motionState() && (int32_t(xTaskGetTickCount()) - _nextReportTime) >= 0) || (_lastJobActive != Job::active())) {
+            if (_reportOvr) {
+                report_ovr_counter = 0;
+                _reportOvr         = false;
+            }
             if (_reportWco) {
                 report_wco_counter = 0;
+                _reportWco         = false;
             }
-            _reportWco     = false;
-            _lastState     = sys.state;
-            _lastProbe     = probeState;
+            _lastStateName = stateName;
             _lastPinString = report_pin_string;
+            _lastJobActive = Job::active();
 
             _nextReportTime = xTaskGetTickCount() + _reportInterval;
             report_realtime_status(*this);
@@ -128,21 +147,25 @@ void Channel::autoReport() {
     }
 }
 
-void Channel::pin_event(uint32_t pinnum, bool active) {
+void Channel::pin_event(pinnum_t pinnum, bool active) {
     try {
-        auto event_pin       = _events.at(pinnum);
-        *_pin_values[pinnum] = active;
-        event_pin->trigger(active);
-    } catch (std::exception& ex) {}
+        auto input_pin = _pins.at(pinnum);
+        protocol_send_event(active ? &pinActiveEvent : &pinInactiveEvent, input_pin);
+    } catch (const std::out_of_range& e) { log_error("Unregistered event from channel pin " << (int)pinnum); }
 }
 
 void Channel::handleRealtimeCharacter(uint8_t ch) {
-    uint32_t cmd;
+    uint32_t cmd = 0;
 
+    if ((ch & 0xf8) == 0xf8) {
+        // 0xf8-0xff are not valid UTF-8 byte but can appear under some
+        // glitch conditions.
+        return;
+    }
     int res = _utf8.decode(ch, cmd);
     if (res == -1) {
         // This can be caused by line noise on an unpowered pendant
-        log_debug("UTF8 decoding error");
+        log_debug("UTF8 decoding error " << to_hex(ch) << " " << to_hex(cmd));
         _active = false;
         return;
     }
@@ -153,17 +176,19 @@ void Channel::handleRealtimeCharacter(uint8_t ch) {
 
     _active = true;
     if (cmd == PinACK) {
-        log_debug("ACK");
-        _ackwait = false;
+        _ackwait = 0;
         return;
     }
     if (cmd == PinNAK) {
-        log_error("Channel device rejected config");
-        log_debug("NAK");
-        _ackwait = false;
+        log_verbose("NAK");
+        _ackwait = -1;
         return;
     }
-
+    if (cmd == PinRST) {
+        _ackwait = -1;
+        send_alarm(ExecAlarm::ExpanderReset);
+        return;
+    }
     if (cmd >= PinLowFirst && cmd < PinLowLast) {
         pin_event(cmd - PinLowFirst, false);
         return;
@@ -183,10 +208,13 @@ void Channel::push(uint8_t byte) {
     }
 }
 
-Channel* Channel::pollLine(char* line) {
+Error Channel::pollLine(char* line) {
+    if (_paused) {
+        return Error::Ok;
+    }
     handle();
     while (1) {
-        int ch = -1;
+        int32_t ch = -1;
         if (line && _queue.size()) {
             ch = _queue.front();
             _queue.pop();
@@ -195,32 +223,26 @@ Channel* Channel::pollLine(char* line) {
             if (ch < 0) {
                 break;
             }
-            if (realtimeOkay(ch) && is_realtime_command(ch)) {
-                handleRealtimeCharacter((uint8_t)ch);
-                continue;
-            }
-            if (!line) {
-                _queue.push(ch);
-                continue;
-            }
-            // Fall through if line is non-null and it is not a realtime character
         }
+        _active = true;
+        if (realtimeOkay(ch) && is_realtime_command(ch)) {
+            handleRealtimeCharacter((uint8_t)ch);
+            continue;
+        }
+        if (!line) {
+            _queue.push(ch);
+            continue;
+        }
+        // Fall through if line is non-null and it is not a realtime character
 
         if (lineComplete(line, ch)) {
-            return this;
+            return Error::Ok;
         }
     }
     if (_active) {
         autoReport();
     }
-    return nullptr;
-}
-
-void Channel::setAttr(int index, bool* value, const std::string& attrString, const char* tag) {
-    if (value) {
-        _pin_values[index] = value;
-    }
-    out_acked(attrString, tag);
+    return Error::NoData;
 }
 
 void Channel::out(const char* s, const char* tag) {
@@ -235,18 +257,10 @@ void Channel::out_acked(const std::string& s, const char* tag) {
     out(s, tag);
 }
 
-void Channel::ready() {
-#if 0
-    // At the moment this is unnecessary because initializing
-    // an input pin triggers an initial value event
-    if (!_pin_values.empty()) {
-        out("GET: io.*");
-    }
-#endif
-}
+void Channel::ready() {}
 
-void Channel::registerEvent(uint8_t code, EventPin* obj) {
-    _events[code] = obj;
+void Channel::registerEvent(pinnum_t pinnum, InputPin* obj) {
+    _pins[pinnum] = obj;
 }
 
 void Channel::ack(Error status) {
@@ -257,17 +271,19 @@ void Channel::ack(Error status) {
     // With verbose errors, the message text is displayed instead of the number.
     // Grbl 0.9 used to display the text, while Grbl 1.1 switched to the number.
     // Many senders support both formats.
-    LogStream msg(*this, "error:");
-    if (config->_verboseErrors) {
-        msg << errorString(status);
-    } else {
+    {
+        LogStream msg(*this, "error:");
         msg << static_cast<int>(status);
+    }
+    if (config->_verboseErrors) {
+        log_error_to(*this, errorString(status));
     }
 }
 
 void Channel::print_msg(MsgLevel level, const char* msg) {
     if (_message_level >= level) {
-        println(msg);
+        write(msg);
+        write("\n");
     }
 }
 
@@ -310,7 +326,7 @@ void Channel::sendLine(MsgLevel level, const std::string* line) {
 // via the std::string* version of send_line().  The original
 // string is freed by the caller sometime after send_line()
 // returns, while the new string is freed by the output task
-// after the message is forwared to the output channel.
+// after the message is forwarded to the output channel.
 // This is the least efficient form, requiring two strings
 // to be allocated and freed, with an intermediate copy.
 // It is used only rarely.
@@ -322,7 +338,7 @@ void Channel::sendLine(MsgLevel level, const std::string& line) {
     }
 }
 
-bool Channel::is_visible(const std::string& stem, const std::string& extension, bool isdir) {
+bool Channel::is_visible(const std::string& stem, std::string extension, bool isdir) {
     if (stem.length() && stem[0] == '.') {
         // Exclude hidden files and directories
         return false;
@@ -334,8 +350,13 @@ bool Channel::is_visible(const std::string& stem, const std::string& extension, 
     if (isdir) {
         return true;
     }
-    std::string_view extensions(_gcode_extensions);
-    int              pos = 0;
+
+    // Convert extension to canonical lower case format
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return ::tolower(c); });
+
+    // common gcode extensions
+    std::string_view extensions(".g .gc .gco .gcode .nc .ngc .ncc .txt .cnc .tap");
+    size_t           pos = 0;
     while (extensions.length()) {
         auto             next_pos       = extensions.find_first_of(' ', pos);
         std::string_view next_extension = extensions.substr(0, next_pos);
@@ -348,4 +369,11 @@ bool Channel::is_visible(const std::string& stem, const std::string& extension, 
         extensions.remove_prefix(next_pos + 1);
     }
     return false;
+}
+
+void Channel::writeUTF8(uint32_t code) {
+    auto v = _utf8.encode(code);
+    for (auto const& b : v) {
+        write(b);
+    }
 }

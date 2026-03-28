@@ -10,7 +10,7 @@
 // Plans and executes the single special motion case for parking. Independent of main planner buffer.
 // NOTE: Uses the always free planner ring buffer head to store motion parameters for execution.
 void Parking::moveto(float* target) {
-    if (sys.abort) {
+    if (sys.abort()) {
         return;  // Block during abort.
     }
     if (plan_buffer_line(target, &plan_data)) {
@@ -21,7 +21,7 @@ void Parking::moveto(float* target) {
         Stepper::wake_up();
         do {
             protocol_exec_rt_system();
-            if (sys.abort) {
+            if (sys.abort()) {
                 return;
             }
         } while (sys.step_control.executeSysMotion);
@@ -53,7 +53,7 @@ bool Parking::can_park() {
     // If the M56 feature is present, M56 controls the value
     // of sys.override_ctrl, thus letting you disable parking
     // by saying M56 P0
-    return sys.override_ctrl == Override::ParkingMotion;
+    return sys.override_ctrl() == Override::ParkingMotion;
 }
 
 void Parking::setup() {
@@ -63,7 +63,7 @@ void Parking::setup() {
     plan_data.motion                = {};
     plan_data.motion.systemMotion   = 1;
     plan_data.motion.noFeedOverride = 1;
-    plan_data.line_number           = PARKING_MOTION_LINE_NUMBER;
+    plan_data.line_number           = 0;
     plan_data.is_jog                = false;
     block                           = plan_get_current_block();
 
@@ -113,7 +113,7 @@ void Parking::park(bool restart) {
 
         log_debug("Spin down");
         spindle->spinDown();
-        report_ovr_counter = 0;  // Set to report change immediately
+        gc_ovr_changed();
 
         // Execute fast parking retract motion to parking target location.
         if (parking_target[_axis] < _target_mpos) {
@@ -128,7 +128,7 @@ void Parking::park(bool restart) {
         // NOTE: Laser mode does not start a parking motion to ensure the laser stops immediately.
         spindle->spinDown();
         config->_coolant->off();
-        report_ovr_counter = 0;  // Set to report changes immediately
+        gc_ovr_changed();
     }
 }
 void Parking::unpark(bool restart) {
@@ -154,7 +154,7 @@ void Parking::unpark(bool restart) {
             } else {
                 log_debug("Spin up");
                 restore_spindle();
-                report_ovr_counter = 0;  // Set to report change immediately
+                gc_ovr_changed();
             }
         }
     }
@@ -162,7 +162,7 @@ void Parking::unpark(bool restart) {
         // Block if safety door re-opened during prior restore actions.
         if (!restart) {
             restore_coolant();
-            report_ovr_counter = 0;  // Set to report change immediately
+            gc_ovr_changed();
         }
     }
 
@@ -192,7 +192,7 @@ void Parking::restore_coolant() {
 
 void Parking::group(Configuration::HandlerBase& handler) {
     handler.item("enable", _enable);
-    handler.item("axis", _axis, axisType);
+    handler.item("axis", _axis);
     handler.item("target_mpos_mm", _target_mpos);
     handler.item("rate_mm_per_min", _rate);
     handler.item("pullout_distance_mm", _pullout, 0, 3e38);

@@ -38,17 +38,18 @@ enum class Message : uint8_t {
     SleepMode       = 11,
     ConfigAlarmLock = 12,
     HardStop        = 13,
+    MustReboot      = 14,  // IO Expander restarted
     FileQuit        = 60,  // mc_critical was called during a file job
 };
 
-typedef uint8_t Counter;  // Report interval
+typedef uint_fast8_t Counter;  // Report interval
 
 extern Counter report_ovr_counter;
 extern Counter report_wco_counter;
 
 //function to notify
-void _notify(const char* title, const char* msg);
-void _notifyf(const char* title, const char* format, ...);
+void notify(const char* title, const char* msg);
+void notifyf(const char* title, const char* format, ...);
 
 // Prints miscellaneous feedback messages.
 void report_feedback_message(Message message);
@@ -58,7 +59,7 @@ void report_error_message(Message message);
 void report_init_message(Channel& channel);
 
 // Prints an echo of the pre-parsed line received right before execution.
-void report_echo_line_received(char* line, Channel& channel);
+void report_echo_line_received(const char* line, Channel& channel);
 
 // Prints realtime status report
 void report_realtime_status(Channel& channel);
@@ -81,9 +82,7 @@ void report_realtime_debug();
 
 void reportTaskStackSize(UBaseType_t& saved);
 
-void hex_msg(uint8_t* buf, const char* prefix, int len);
-
-void addPinReport(char* status, char pinLetter);
+void hex_msg(uint8_t* buf, const char* prefix, size_t len);
 
 #include "MyIOStream.h"
 
@@ -93,9 +92,6 @@ const char* state_name();
 extern const char* grbl_version;
 extern const char* git_info;
 extern const char* git_url;
-
-// Callout to custom code
-void display_init();
 
 extern bool readyNext;
 

@@ -5,11 +5,12 @@
 
 #pragma once
 
-#include "Types.h"
+#include "State.h"
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include "Config.h"
+#include "Alarm.h"
 
 // Line buffer size from the serial input stream to be executed.Also, governs the size of
 // each of the startup blocks, as they are each stored as a string of this size.
@@ -44,36 +45,14 @@ void protocol_buffer_synchronize();
 void protocol_disable_steppers();
 void protocol_cancel_disable_steppers();
 
-bool GetPowerLineValue();
+void protocol_do_motion_cancel();
 
 extern volatile bool rtCycleStop;
 
 extern volatile bool runLimitLoop;
 
-// Alarm codes.
-enum class ExecAlarm : uint8_t {
-    None                  = 0,
-    HardLimit             = 1,
-    SoftLimit             = 2,
-    AbortCycle            = 3,
-    ProbeFailInitial      = 4,
-    ProbeFailContact      = 5,
-    HomingFailReset       = 6,
-    HomingFailDoor        = 7,
-    HomingFailPulloff     = 8,
-    HomingFailApproach    = 9,
-    SpindleControl        = 10,
-    ControlPin            = 11,
-    HomingAmbiguousSwitch = 12,
-    HardStop              = 13,
-    Unhomed               = 14,
-    Init                  = 15,
-};
-
-extern volatile ExecAlarm lastAlarm;
-
 #include <map>
-extern std::map<ExecAlarm, const char*> AlarmNames;
+extern const std::map<ExecAlarm, const char*> AlarmNames;
 
 const char* alarmString(ExecAlarm alarmNumber);
 
@@ -84,52 +63,55 @@ enum AccessoryOverride {
     MistToggle     = 3,
 };
 
-extern ArgEvent feedOverrideEvent;
-extern ArgEvent rapidOverrideEvent;
-extern ArgEvent spindleOverrideEvent;
-extern ArgEvent accessoryOverrideEvent;
-extern ArgEvent limitEvent;
-extern ArgEvent faultPinEvent;
+extern const ArgEvent feedOverrideEvent;
+extern const ArgEvent rapidOverrideEvent;
+extern const ArgEvent spindleOverrideEvent;
+extern const ArgEvent accessoryOverrideEvent;
+extern const ArgEvent limitEvent;
+extern const ArgEvent faultPinEvent;
+extern const ArgEvent pinActiveEvent;
+extern const ArgEvent pinInactiveEvent;
 
-extern ArgEvent reportStatusEvent;
+extern const ArgEvent reportStatusEvent;
 
-extern NoArgEvent safetyDoorEvent;
-extern NoArgEvent feedHoldEvent;
-extern NoArgEvent cycleStartEvent;
-extern NoArgEvent cycleStopEvent;
-extern NoArgEvent motionCancelEvent;
-extern NoArgEvent sleepEvent;
-extern NoArgEvent rtResetEvent;
-extern NoArgEvent debugEvent;
-extern NoArgEvent unhomedEvent;
-extern NoArgEvent startEvent;
-extern NoArgEvent restartEvent;
-extern NoArgEvent PowerDetectionEvent;
+extern const NoArgEvent safetyDoorEvent;
+extern const NoArgEvent feedHoldEvent;
+extern const NoArgEvent cycleStartEvent;
+extern const NoArgEvent cycleStopEvent;
+extern const NoArgEvent motionCancelEvent;
+extern const NoArgEvent sleepEvent;
+extern const NoArgEvent rtResetEvent;
+extern const NoArgEvent debugEvent;
+extern const NoArgEvent unhomedEvent;
+extern const NoArgEvent startEvent;
+extern const NoArgEvent restartEvent;
+extern const NoArgEvent fullResetEvent;
 
-extern NoArgEvent runStartupLinesEvent;
+extern const NoArgEvent runStartupLinesEvent;
+extern const NoArgEvent homingButtonEvent;
 
-// extern NoArgEvent statusReportEvent;
+// extern const NoArgEvent statusReportEvent;
 
-extern xQueueHandle event_queue;
+extern QueueHandle_t event_queue;
 
 extern bool pollingPaused;
 
 struct EventItem {
-    Event* event;
-    void*  arg;
+    const Event* event;
+    void*        arg;
 };
 
-void protocol_send_event(Event*, void* arg = 0);
+void protocol_send_event(const Event*, void* arg = 0);
 void protocol_handle_events();
 
 void send_alarm(ExecAlarm alarm);
 void send_alarm_from_ISR(ExecAlarm alarm);
 
-inline void protocol_send_event(Event* evt, int arg) {
-    protocol_send_event(evt, (void*)arg);
+inline void protocol_send_event(const Event* evt, uint32_t arg) {
+    protocol_send_event(evt, reinterpret_cast<void*>(arg));
 }
 
-void protocol_send_event_from_ISR(Event* evt, void* arg = 0);
+void protocol_send_event_from_ISR(const Event* evt, void* arg = 0);
 
 void drain_messages();
 

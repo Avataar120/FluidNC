@@ -30,12 +30,12 @@ namespace Spindles {
     class BESC : public PWM {
     private:
         // Fixed
-        const uint32_t besc_pwm_min_freq = 50;    // 50 Hz
-        const uint32_t besc_pwm_max_freq = 2000;  // 50 Hz
+        static constexpr uint32_t besc_pwm_min_freq = 50;    // 50 Hz
+        static constexpr uint32_t besc_pwm_max_freq = 2000;  // 50 Hz
 
         // Calculated
-        uint32_t _pulse_span_counts;  // In counts of a 32-bit counter. ESP32 uses up to 20bits
-        uint32_t _min_pulse_counts;   // In counts of a 32-bit counter  ESP32 uses up to 20bits
+        uint32_t _pulse_span_counts;  // In counts of a 32-bit counter
+        uint32_t _min_pulse_counts;   // In counts of a 32-bit counter
 
     protected:
         // Configurable
@@ -43,12 +43,12 @@ namespace Spindles {
         uint32_t _max_pulse_us = 2200;  // microseconds
 
     public:
-        BESC() = default;
+        BESC(const char* name) : PWM(name) {}
 
-        BESC(const BESC&) = delete;
-        BESC(BESC&&)      = delete;
+        BESC(const BESC&)            = delete;
+        BESC(BESC&&)                 = delete;
         BESC& operator=(const BESC&) = delete;
-        BESC& operator=(BESC&&) = delete;
+        BESC& operator=(BESC&&)      = delete;
 
         void init() override;
         void config_message() override;
@@ -66,9 +66,6 @@ namespace Spindles {
         }
 
         void afterParse() override {}
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "BESC"; }
 
         ~BESC() {}
     };

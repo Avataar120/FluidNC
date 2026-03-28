@@ -34,23 +34,18 @@
   To allow the realtime commands to be randomly mixed in the stream of data, we
   read all channels as fast as possible. The realtime commands are acted upon and
   the other characters are placed into a per-channel buffer.  When a complete line
-  is received, pollChannel returns the associated channel spec.
+  is received, pollChannels returns the associated channel spec.
 */
 
 #include "Serial.h"
-#include "UartChannel.h"
 #include "Machine/MachineConfig.h"
-#include "WebUI/InputBuffer.h"
-#include "WebUI/Commands.h"
-#include "WebUI/WifiServices.h"
 #include "MotionControl.h"
 #include "Report.h"
 #include "System.h"
 #include "Protocol.h"  // *Event
 #include "InputFile.h"
-#include "WebUI/InputBuffer.h"  // XXX could this be a StringStream ?
-#include "Main.h"               // display()
-#include "StartupLog.h"         // startupLog
+#include "Main.h"        // display()
+#include "StartupLog.h"  // startupLog
 
 #include "Driver/fluidnc_gpio.h"
 
@@ -63,29 +58,26 @@
 std::mutex AllChannels::_mutex_general;
 std::mutex AllChannels::_mutex_pollLine;
 
-static TaskHandle_t channelCheckTaskHandle = 0;
-
 void heapCheckTask(void* pvParameters) {
     static uint32_t heapSize = 0;
     while (true) {
-        std::atomic_thread_fence(std::memory_order::memory_order_seq_cst);  // read fence for settings and whatnot
+        std::atomic_thread_fence(std::memory_order_seq_cst);  // read fence for settings and whatnot
         uint32_t newHeapSize = xPortGetFreeHeapSize();
         if (newHeapSize != heapSize) {
             heapSize = newHeapSize;
             log_info("heap " << heapSize);
         }
-        vTaskDelay(3000 / portTICK_RATE_MS);  // Yield to other tasks
+        vTaskDelay(3000 / portTICK_PERIOD_MS);  // Yield to other tasks
 
-        static UBaseType_t uxHighWaterMark = 0;
 #ifdef DEBUG_TASK_STACK
+        static UBaseType_t uxHighWaterMark = 0;
         reportTaskStackSize(uxHighWaterMark);
 #endif
     }
 }
 
 void AllChannels::init() {
-    registration(&WebUI::inputBuffer);  // Macros
-    registration(&startupLog);          // Early startup messages for $SS
+    registration(&startupLog);  // Early startup messages for $SS
 }
 
 void AllChannels::ready() {
@@ -141,6 +133,14 @@ size_t AllChannels::write(uint8_t data) {
     _mutex_general.unlock();
     return 1;
 }
+void AllChannels::notifyOvr(void) {
+    _mutex_general.lock();
+    for (auto channel : _channelq) {
+        channel->notifyOvr();
+    }
+    _mutex_general.unlock();
+}
+
 void AllChannels::notifyWco(void) {
     _mutex_general.lock();
     for (auto channel : _channelq) {
@@ -152,14 +152,6 @@ void AllChannels::notifyNgc(CoordIndex coord) {
     _mutex_general.lock();
     for (auto channel : _channelq) {
         channel->notifyNgc(coord);
-    }
-    _mutex_general.unlock();
-}
-
-void AllChannels::stopJob() {
-    _mutex_general.lock();
-    for (auto channel : _channelq) {
-        channel->stopJob();
     }
     _mutex_general.unlock();
 }
@@ -180,7 +172,7 @@ void AllChannels::print_msg(MsgLevel level, const char* msg) {
     _mutex_general.unlock();
 }
 
-Channel* AllChannels::find(const std::string& name) {
+Channel* AllChannels::find(const std::string_view name) {
     _mutex_general.lock();
     for (auto channel : _channelq) {
         if (channel->name() == name) {
@@ -191,7 +183,7 @@ Channel* AllChannels::find(const std::string& name) {
     _mutex_general.unlock();
     return nullptr;
 }
-Channel* AllChannels::pollLine(char* line) {
+Channel* AllChannels::poll(char* line) {
     Channel* deadChannel;
     while (xQueueReceive(_killQueue, &deadChannel, 0)) {
         deregistration(deadChannel);
@@ -205,7 +197,7 @@ Channel* AllChannels::pollLine(char* line) {
 
     for (auto channel : _channelq) {
         // Skip the last channel in the loop
-        if (channel != _lastChannel && channel && channel->pollLine(line)) {
+        if (channel != _lastChannel && channel->pollLine(line) == Error::Ok) {
             _lastChannel = channel;
             _mutex_pollLine.unlock();
             return _lastChannel;
@@ -213,7 +205,7 @@ Channel* AllChannels::pollLine(char* line) {
     }
     _mutex_pollLine.unlock();
     // If no other channel returned a line, try the last one
-    if (_lastChannel && _lastChannel->pollLine(line)) {
+    if (_lastChannel && _lastChannel->pollLine(line) == Error::Ok) {
         return _lastChannel;
     }
     _lastChannel = nullptr;
@@ -228,20 +220,17 @@ Channel* pollChannels(char* line) {
     // planner buffer starvation due to not calling Stepper::prep_buffer()
     // frequently enough, which is normally called periodically at the end
     // of protocol_exec_rt_system() via protocol_execute_realtime().
-    static int counter = 0;
+    static uint_fast8_t counter = 0;
     if (line) {
         counter = 0;
     }
-    if (counter > 0) {
+    if (counter) {
         --counter;
         return nullptr;
     }
     counter = 50;
 
-    Channel* retval = allChannels.pollLine(line);
-
-    WebUI::COMMANDS::handle();      // Handles ESP restart
-    WebUI::wifi_services.handle();  // OTA, webServer, telnetServer polling
+    Channel* retval = allChannels.poll(line);
 
     return retval;
 }

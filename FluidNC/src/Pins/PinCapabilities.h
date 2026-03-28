@@ -11,12 +11,12 @@ namespace Pins {
     /*
     Pin capabilities are what a pin _can_ do using the internal hardware. For GPIO pins, these
     are the internal hardware capabilities of the pins, such as the capability to pull-up from
-    hardware, wether or not a pin supports input/output, etc.
+    hardware, whether or not a pin supports input/output, etc.
     */
     class PinCapabilities {
         uint32_t _value;
 
-        constexpr PinCapabilities(const uint32_t value) : _value(value) {}
+        explicit constexpr PinCapabilities(const uint32_t value) : _value(value) {}
 
         friend class PinAttributes;  // Wants access to _value for validation
 

@@ -1,20 +1,19 @@
 #pragma once
 
-#include "src/Event.h"
+#include "Event.h"
+#include "InputPin.h"
+#include "Alarm.h"
 #include <string>
 
-class EventPin {
+class EventPin : public InputPin {
 protected:
-    Event* _event = nullptr;  // Subordinate event that is called conditionally
+    const Event* _event;
+    ExecAlarm    _alarm;
 
 public:
-    std::string _legend;  // The name that appears in init() messages and the name of the configuration item
+    EventPin(const Event* event, const ExecAlarm alarm, const char* legend) : InputPin(legend), _event(event), _alarm(alarm) {};
 
-    EventPin(Event* event, const char* legend);
-
-    virtual void update(bool state) {};
-
-    void trigger(bool active);
+    void trigger(bool active) override;
 
     ~EventPin() {}
 };
