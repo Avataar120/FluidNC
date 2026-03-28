@@ -59,7 +59,7 @@ else:
     except:
         url = "None"
 
-grbl_version = tag.replace('v','').rpartition('.')[0]
+grbl_version = tag.rpartition('.')[0]
 git_info = '%s%s' % (tag, rev)
 git_url = url
 
