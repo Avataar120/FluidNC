@@ -599,8 +599,18 @@ static Error xmodem_receive(const char* value, AuthenticationLevel auth_level, C
     if (!value || !*value) {
         value = "uploaded";
     }
+
+    char Name[100] = "";
+
     FileStream* outfile;
     try {
+        if (memcmp(value, "4_AvaShield", strlen("4_AvaShield") - 1) == 0)
+            memcpy(&Name, "config.yaml", strlen("config.yaml"));
+        else
+            memcpy(&Name, value, strlen(value));
+
+        log_debug(Name);
+
         outfile = new FileStream(value, "w");
     } catch (...) {
         out.write(0x18);  // Cancel xmodem transfer with CAN
