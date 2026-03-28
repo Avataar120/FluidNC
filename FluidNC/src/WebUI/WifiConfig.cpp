@@ -231,6 +231,7 @@ namespace WebUI {
     static EnumSetting*     _sta_min_security;
     static PasswordSetting* _sta_password;
     static EnumSetting*     _wifi_ps_mode;
+    IntSetting*             CMD_ResetOnMachinePoweredOn;
 
     class WiFiConfig : public Module {
     private:
@@ -938,9 +939,7 @@ namespace WebUI {
             return result;
         }
 
-        static bool isOn() {
-            return !(WiFi.getMode() == WIFI_OFF);
-        }
+        static bool isOn() { return !(WiFi.getMode() == WIFI_OFF); }
 
         // Used by js/scanwifidlg.js
 
@@ -993,6 +992,8 @@ namespace WebUI {
         WiFiConfig(const char* name) : Module(name) {}
 
         void init() {
+            CMD_ResetOnMachinePoweredOn =
+                new IntSetting("Reset when the machine is powered ON", WEBSET, WA, "NULL", "ResetOnPowerON", 1, 0, 1, NULL);
             _sta_ssid    = new StringSetting("Station SSID", WEBSET, WA, "ESP100", "Sta/SSID", "", MIN_SSID_LENGTH, MAX_SSID_LENGTH);
             _hostname    = new HostnameSetting("Hostname", "ESP112", "Hostname", "fluidnc");
             _ap_channel  = new IntSetting("AP Channel", WEBSET, WA, "ESP108", "AP/Channel", 1, 1, 14);
@@ -1065,9 +1066,7 @@ namespace WebUI {
             //        wifi_services.begin();
         }
 
-        void deinit() override {
-            StopWiFi();
-        }
+        void deinit() override { StopWiFi(); }
 
         void build_info(Channel& channel) {
             std::string sti = station_info();
@@ -1095,13 +1094,9 @@ namespace WebUI {
             }
         }
 
-        bool is_radio() override {
-            return true;
-        }
+        bool is_radio() override { return true; }
 
-        ~WiFiConfig() {
-            deinit();
-        }
+        ~WiFiConfig() { deinit(); }
     };
 
     ModuleFactory::InstanceBuilder<WiFiConfig> __attribute__((init_priority(105))) wifi_module("wifi", true);

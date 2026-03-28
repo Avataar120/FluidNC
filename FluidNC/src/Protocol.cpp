@@ -20,6 +20,7 @@
 #include "Job.h"
 #include "Driver/restart.h"
 #include "Driver/watchdog.h"
+#include "ProcessSettings.h"
 
 volatile ExecAlarm lastAlarm;  // The most recent alarm code
 
@@ -231,6 +232,43 @@ static void alarm_msg(ExecAlarm alarm_code) {
     delay_ms(500);  // Force delay to ensure message clears serial write buffer.
 }
 
+bool GetPowerLineValue() {
+    for (auto pin : config->_control->_pins)
+        if (pin->legend() == "power_pin")
+            return !(pin->get());
+
+    return 1;
+}
+
+void Check_Power_Presence_And_Reset() {
+    static int v_old        = 1;
+    static int Autorisation = 0;
+    static int n            = 0;
+
+    int v = GetPowerLineValue();
+
+    if ((v == 1) && (v_old == 0)) {
+        Autorisation = 1;
+    }
+    v_old = v;
+
+    if (Autorisation) {
+        n++;
+        delay_ms(1);
+        if (n > 100) {
+            Autorisation = 0;
+            n            = 0;
+            if (v == 1) {
+                log_info("POWER ON DETECTED");
+                if (GetResetWhenPowerOn()) {
+                    log_info("BOARD RESET - see $ResetOnPowerON if you want to disable this feature");
+                    delay_ms(2000);
+                    protocol_send_event(&fullResetEvent);
+                }
+            }
+        }
+    }
+}
 const uint32_t heapWarnThreshold = 15000;
 
 uint32_t heapLowWater           = UINT_MAX;
@@ -246,6 +284,8 @@ void protocol_main_loop() {
     // This is also where the system idles while waiting for something to do.
     // ---------------------------------------------------------------------------------
     for (;; vTaskDelay(1)) {
+        Check_Power_Presence_And_Reset();
+
         if (activeChannel) {
             // The input polling task has collected a line of input
             if (gcode_echo->get()) {
@@ -1201,8 +1241,8 @@ const NoArgEvent restartEvent { protocol_do_soft_restart };
 const NoArgEvent fullResetEvent { restart };
 const NoArgEvent runStartupLinesEvent { protocol_run_startup_lines };
 const NoArgEvent homingButtonEvent { protocol_do_start_homing };
-
 const NoArgEvent rtResetEvent { protocol_do_rt_reset };
+const NoArgEvent PowerDetectionEvent { protocol_do_power_detection };
 
 // The problem is that report_realtime_status needs a channel argument
 // Event statusReportEvent { protocol_do_status_report(XXX) };
@@ -1231,6 +1271,11 @@ void protocol_handle_events() {
         feed_watchdog();
     }
 }
+
+void protocol_do_power_detection() {
+    log_info("No power detected");
+}
+
 void send_alarm(ExecAlarm alarm) {
     protocol_send_event(&alarmEvent, (void*)alarm);
 }

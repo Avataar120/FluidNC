@@ -47,6 +47,8 @@ void protocol_cancel_disable_steppers();
 
 void protocol_do_motion_cancel();
 
+bool GetPowerLineValue();
+
 extern volatile bool rtCycleStop;
 
 extern volatile bool runLimitLoop;
@@ -89,6 +91,8 @@ extern const NoArgEvent fullResetEvent;
 
 extern const NoArgEvent runStartupLinesEvent;
 extern const NoArgEvent homingButtonEvent;
+extern const NoArgEvent PowerDetectionEvent;
+extern void             protocol_do_power_detection();
 
 // extern const NoArgEvent statusReportEvent;
 

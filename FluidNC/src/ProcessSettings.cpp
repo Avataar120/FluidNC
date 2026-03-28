@@ -26,6 +26,7 @@
 #include "Driver/backtrace.h"     // backtrace_get(), etc.
 #include "FileCommands.h"         // make_file_commands()
 #include "Job.h"                  // Job::active()
+#include "WebUI/WifiConfig.h"
 
 #include "FluidPath.h"
 #include "HashFS.h"
@@ -636,6 +637,10 @@ static Error listErrors(const char* value, AuthenticationLevel auth_level, Chann
         log_stream(out, static_cast<int>(it->first) << ": " << it->second);
     }
     return Error::Ok;
+}
+
+int GetResetWhenPowerOn() {
+    return WebUI::CMD_ResetOnMachinePoweredOn->get();
 }
 
 static Error motor_control(const char* value, bool disable) {
